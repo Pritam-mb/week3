@@ -30,7 +30,7 @@ from .ollama import generate_recipe, load_fixture_recipe
 from .ollama import readiness as ollama_readiness
 from .anomaly import AnomalyAnalyzer
 from .telemetry import Telemetry
-from .privacy import safe_profile_context
+from .privacy import safe_model_error, safe_profile_context, safe_verification_feedback
 
 
 class MoltService:
@@ -111,6 +111,9 @@ class MoltService:
             for version in versions:
                 version["recipe"] = json.loads(version.pop("recipe_json"))
                 version["provider_metadata"] = json.loads(version.pop("provider_metadata_json"))
+                verification = connection.execute("SELECT id, status, checks_total, checks_passed, checks_failed, results_json FROM verification_runs WHERE recipe_version_id = ? ORDER BY rowid DESC LIMIT 1", (version["id"],)).fetchone()
+                if verification:
+                    version["verification"] = json.loads(verification["results_json"]) | {"verification_id": verification["id"]}
             automation["versions"] = versions
             automation["runs"] = runs
             automation["repair_proposals"] = repairs
@@ -167,6 +170,10 @@ class MoltService:
             raise MoltError("NOT_FOUND", "Recipe version was not found.")
         row["recipe"] = json.loads(row.pop("recipe_json"))
         row["provider_metadata"] = json.loads(row.pop("provider_metadata_json"))
+        with closing(self.db.connect()) as connection:
+            verification = connection.execute("SELECT id, results_json FROM verification_runs WHERE recipe_version_id = ? ORDER BY rowid DESC LIMIT 1", (version_id,)).fetchone()
+        if verification:
+            row["verification"] = json.loads(verification["results_json"]) | {"verification_id": verification["id"]}
         return row
 
     def get_run(self, run_id: str) -> dict[str, Any]:
@@ -183,27 +190,109 @@ class MoltService:
         with self.telemetry.span("recipe.compile", provider=provider):
             return self._generate_candidate(automation_id, task, profile, recipe_file=recipe_file, model=model)
 
+    def _update_provider_metadata(self, version_id: str, metadata: dict[str, Any]) -> None:
+        with self.db.transaction() as connection:
+            connection.execute("UPDATE recipe_versions SET provider_metadata_json = ? WHERE id = ?", (json_text(metadata), version_id))
+
+    def _generate_verified_model_candidate(
+        self,
+        automation_id: str,
+        task: str,
+        profile: dict[str, Any],
+        *,
+        model: str,
+        fixtures: list[tuple[Path, Path]],
+        created_from: str = "initial",
+        base_version_id: str | None = None,
+        active_recipe: dict[str, Any] | None = None,
+        drift_report: dict[str, Any] | None = None,
+        telemetry_stage: str = "recipe.compile_gemma",
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "provider": "ollama",
+            "model": model,
+            "llm_calls": 0,
+            "attempts": 0,
+            "prompt_tokens": 0,
+            "response_tokens": 0,
+        }
+        last_error: MoltError | None = None
+        last_version: dict[str, Any] | None = None
+        previous_recipe: dict[str, Any] | None = None
+        feedback: dict[str, Any] | None = None
+        for attempt in range(1, self.config.ollama_max_retries + 2):
+            metadata["attempts"] = attempt
+            try:
+                with self.telemetry.span(telemetry_stage, attempt=attempt):
+                    recipe, call_metadata = generate_recipe(
+                        model,
+                        task,
+                        safe_profile_context(profile),
+                        endpoint=self.config.ollama_base_url,
+                        feedback=feedback or (safe_model_error(last_error.code) if last_error else None),
+                        active_recipe=active_recipe,
+                        previous_recipe=previous_recipe,
+                        drift_report=drift_report,
+                        timeout=self.config.ollama_timeout_seconds,
+                        max_response_bytes=self.config.ollama_max_response_bytes,
+                        max_prompt_bytes=self.config.max_recipe_bytes,
+                    )
+            except MoltError as exc:
+                if exc.code != "MODEL_PROMPT_TOO_LARGE":
+                    metadata["llm_calls"] += 1
+                last_error = exc
+                feedback = safe_model_error(exc.code)
+                continue
+
+            reported_calls = call_metadata.get("llm_calls", 1)
+            metadata["llm_calls"] += int(reported_calls) if isinstance(reported_calls, int) else 1
+            for key in ("prompt_tokens", "response_tokens"):
+                value = call_metadata.get(key)
+                if isinstance(value, int):
+                    metadata[key] += value
+            metadata.update({key: value for key, value in call_metadata.items() if key not in {"llm_calls", "prompt_tokens", "response_tokens"}})
+
+            version = self.create_version(
+                automation_id,
+                recipe,
+                created_from=created_from,
+                model_name=model,
+                metadata=metadata,
+                base_version_id=base_version_id,
+            )
+            with self.db.transaction() as connection:
+                connection.execute("UPDATE recipe_versions SET status = 'VERIFYING' WHERE id = ?", (version["id"],))
+            verification = self.verify_version(version["id"], fixtures=fixtures)
+            final_metadata = metadata | {
+                "verification_attempt": attempt,
+                "verification_failures": verification["checks_failed"],
+            }
+            self._update_provider_metadata(version["id"], final_metadata)
+            version = self.get_version(version["id"])
+            version["provider_metadata"] = final_metadata
+            version["verification"] = verification
+            if verification["status"] == "PASS":
+                return version
+            last_version = version
+            previous_recipe = recipe
+            feedback = safe_verification_feedback(verification)
+            last_error = MoltError("RECIPE_VERIFICATION_FAILED", "The candidate failed independent verification.")
+
+        if last_version is not None:
+            final_metadata = metadata | {"verification_retry_exhausted": True}
+            self._update_provider_metadata(last_version["id"], final_metadata)
+            last_version["provider_metadata"] = final_metadata
+            return last_version
+        raise last_error or MoltError("MODEL_RESPONSE_INVALID", "Recipe compilation failed after the configured attempts.")
+
     def _generate_candidate(self, automation_id: str, task: str, profile: dict[str, Any], *, recipe_file: str | None = None, model: str | None = None) -> dict[str, Any]:
         if recipe_file:
             recipe = load_fixture_recipe(Path(recipe_file))
             metadata = {"provider": "fixture", "llm_calls": 0, "attempts": 1}
         elif model or self.config.ollama_model:
             model = model or self.config.ollama_model
-            recipe = None
-            metadata = {"provider": "ollama", "llm_calls": 0, "attempts": 0}
-            last_error: MoltError | None = None
-            for attempt in range(1, self.config.ollama_max_retries + 2):
-                try:
-                    with self.telemetry.span("recipe.compile_gemma", attempt=attempt):
-                        recipe, call_metadata = generate_recipe(model, task, safe_profile_context(profile), endpoint=self.config.ollama_base_url, feedback=str(last_error) if last_error else None, timeout=self.config.ollama_timeout_seconds, max_response_bytes=self.config.ollama_max_response_bytes)
-                    metadata.update(call_metadata)
-                    metadata["attempts"] = attempt
-                    break
-                except MoltError as exc:
-                    last_error = exc
-                    metadata["attempts"] = attempt
-            if recipe is None:
-                raise last_error or MoltError("MODEL_RESPONSE_INVALID", "Recipe compilation failed after the configured attempts.")
+            fixtures = self._fixture_pairs(automation_id, profile=profile)
+            return self._generate_verified_model_candidate(automation_id, task, profile, model=model, fixtures=fixtures)
         else:
             raise MoltError("MODEL_REQUIRED", "Choose a fixture recipe or a local Ollama model.")
         version = self.create_version(automation_id, recipe, model_name=model, metadata=metadata)
@@ -211,11 +300,13 @@ class MoltService:
             connection.execute("UPDATE recipe_versions SET status = 'VERIFYING' WHERE id = ?", (version["id"],))
         return self.get_version(version["id"])
 
-    def _fixture_pairs(self, automation_id: str) -> list[tuple[Path, Path]]:
+    def _fixture_pairs(self, automation_id: str, *, recipe: dict[str, Any] | None = None, profile: dict[str, Any] | None = None) -> list[tuple[Path, Path]]:
         root = Path(__file__).resolve().parent.parent / "examples"
         automation = self.get_automation(automation_id)
-        recipe = (automation.get("candidate") or automation.get("active_version") or {}).get("recipe", {})
-        defaults = [(root / "orders_input.csv", root / "orders_expected.csv")] if str(recipe.get("name", "")).startswith("normalize_weekly_orders") else [(root / "input" / "golden.csv", root / "expected" / "golden.csv"), (root / "input" / "heldout.csv", root / "expected" / "heldout.csv")]
+        recipe = recipe or (automation.get("candidate") or automation.get("active_version") or {}).get("recipe", {})
+        columns = set(profile.get("columns", [])) if profile else set()
+        is_orders = {"order_id", " Customer Name ", "status", "order_date"} <= columns or str(recipe.get("name", "")).startswith("normalize_weekly_orders")
+        defaults = [(root / "orders_input.csv", root / "orders_expected.csv")] if is_orders else [(root / "input" / "golden.csv", root / "expected" / "golden.csv"), (root / "input" / "heldout.csv", root / "expected" / "heldout.csv")]
         with closing(self.db.connect()) as connection:
             stored = connection.execute("SELECT input_artifact_id, expected_artifact_id FROM test_fixtures WHERE automation_id = ? AND expected_artifact_id IS NOT NULL ORDER BY created_at", (automation_id,)).fetchall()
             paths = []
@@ -261,7 +352,7 @@ class MoltService:
     def _approve_version(self, version_id: str) -> dict[str, Any]:
         version = self.get_version(version_id)
         with self.db.transaction() as connection:
-            latest = connection.execute("SELECT * FROM verification_runs WHERE recipe_version_id = ? ORDER BY started_at DESC LIMIT 1", (version_id,)).fetchone()
+            latest = connection.execute("SELECT * FROM verification_runs WHERE recipe_version_id = ? ORDER BY rowid DESC LIMIT 1", (version_id,)).fetchone()
             if not latest or latest["status"] != "PASS":
                 raise MoltError("APPROVAL_REQUIRED", "Recipe cannot be approved without passing verification.")
             connection.execute("UPDATE recipe_versions SET status = 'ARCHIVED' WHERE automation_id = ? AND status = 'ACTIVE'", (version["automation_id"],))
@@ -300,7 +391,12 @@ class MoltService:
             raise MoltError("APPROVAL_REQUIRED", "Automation has no active recipe to repair.")
         if run_id:
             run = self.get_run(run_id)
-            drift = {"run_id": run_id, "error_code": run.get("error_code"), "error_message": run.get("error_message"), "input": run.get("input")}
+            drift = {
+                "run_id": run_id,
+                "error_code": run.get("error_code") or "UNKNOWN_DRIFT",
+                "error_message": "The approved recipe was blocked by a deterministic drift check.",
+                "message": "The approved recipe was blocked by a deterministic drift check.",
+            }
             profile = self.profile(run["input"]) if run.get("input") and Path(run["input"]).is_file() else {}
         else:
             drift, profile = {"reason": "user_requested_repair"}, {}
@@ -308,25 +404,27 @@ class MoltService:
             candidate = load_fixture_recipe(Path(recipe_file))
             metadata = {"provider": "fixture", "llm_calls": 0}
         elif model:
-            candidate = None
-            metadata = {"provider": "ollama", "llm_calls": 0, "attempts": 0}
-            last_error: MoltError | None = None
-            for attempt in range(1, self.config.ollama_max_retries + 2):
-                try:
-                    with self.telemetry.span("repair.propose_gemma", attempt=attempt):
-                        candidate, call_metadata = generate_recipe(model, "Repair the active recipe using this drift report", profile, endpoint=self.config.ollama_base_url, active_recipe=active["recipe"], drift_report=drift, feedback=str(last_error) if last_error else None, timeout=self.config.ollama_timeout_seconds, max_response_bytes=self.config.ollama_max_response_bytes)
-                    metadata.update(call_metadata)
-                    metadata["attempts"] = attempt
-                    break
-                except MoltError as exc:
-                    last_error = exc
-                    metadata["attempts"] = attempt
-            if candidate is None:
-                raise last_error or MoltError("MODEL_RESPONSE_INVALID", "Repair proposal failed after the configured attempts.")
+            fixtures = self._fixture_pairs(automation_id, recipe=active["recipe"], profile=profile)
+            generated = self._generate_verified_model_candidate(
+                automation_id,
+                "Repair the active recipe using this drift report",
+                profile,
+                model=model,
+                fixtures=fixtures,
+                created_from="repair",
+                base_version_id=active["id"],
+                active_recipe=active["recipe"],
+                drift_report=drift,
+                telemetry_stage="repair.propose_gemma",
+            )
+            candidate = generated["recipe"]
+            metadata = generated["provider_metadata"]
+            candidate_version = generated
         else:
             candidate = active["recipe"]
             metadata = {"provider": "manual-review", "llm_calls": 0, "note": "Candidate copied for local review; supply a model for a generated repair."}
-        candidate_version = self.create_version(automation_id, candidate, created_from="repair", model_name=model, metadata=metadata, base_version_id=active["id"])
+        if recipe_file or not model:
+            candidate_version = self.create_version(automation_id, candidate, created_from="repair", model_name=model, metadata=metadata, base_version_id=active["id"])
         proposal_id = new_id("repair")
         with self.db.transaction() as connection:
             connection.execute("INSERT INTO repair_proposals(id,automation_id,base_version_id,candidate_version_id,source_run_id,drift_report_json,operation_diff_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (proposal_id, automation_id, active["id"], candidate_version["id"], run_id, json_text(drift), json_text(operation_diff(active["recipe"], candidate)), "PROPOSED", now()))

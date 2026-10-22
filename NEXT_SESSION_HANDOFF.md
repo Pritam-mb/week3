@@ -185,4 +185,4 @@ final.txt
 
 ### Next concrete step
 
-Keep the Gemma candidate/repair inactive unless a human reviews a candidate that passes the full fixture suite. If sponsor evidence is still needed, inspect the Sentry dashboard for the redacted smoke trace without exposing row data. Do not enable TabPFN until the supported labeled task, license/model-weight access, and safe feature columns are explicitly confirmed.
+The model-backed compile path now retries schema-valid candidates after independent verification failures with bounded redacted feedback; failed candidates remain rejected and inactive. A fresh live compile after this change still returned `RECIPE_SCHEMA_INVALID` within its configured attempts, so no live Gemma candidate is approved. Keep Gemma candidates and repairs inactive unless they pass the full fixture suite. If sponsor evidence is still needed, inspect the Sentry dashboard for the redacted smoke trace without exposing row data. Do not enable TabPFN until the supported labeled task, license/model-weight access, and safe feature columns are explicitly confirmed.

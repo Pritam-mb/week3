@@ -273,7 +273,7 @@ def command_init_demo(args: argparse.Namespace) -> int:
     automation = service.create_automation("Expense export normalizer", "Normalize synthetic expense CSV exports locally.", str(input_path))
     profile = service.profile(input_path)
     version = service.generate_candidate(automation["id"], "Normalize the expense export", profile, recipe_file=str(DEFAULT_RECIPE))
-    verification = service.verify_version(version["id"])
+    verification = version.get("verification") or service.verify_version(version["id"])
     if verification["status"] != "PASS":
         print(json.dumps(verification, indent=2))
         return 1
@@ -296,7 +296,7 @@ def command_compile(args: argparse.Namespace) -> int:
     automation = service.create_automation(args.name, args.task, str(input_path))
     profile = service.profile(input_path)
     version = service.generate_candidate(automation["id"], args.task, profile, recipe_file=args.recipe_file, model=args.model)
-    verification = service.verify_version(version["id"])
+    verification = version.get("verification") or service.verify_version(version["id"])
     _json_print({"automation": automation["id"], "version": version["id"], "verification": verification, "model": args.model or config.ollama_model if not args.recipe_file else None})
     if verification["status"] != "PASS":
         return 1
@@ -321,7 +321,16 @@ def propose_repair(args: argparse.Namespace) -> int:
             return 2
         drift_profile = profile_csv(Path(args.input))
         try:
-            candidate, metadata = generate_recipe(args.model, "Repair the active expense recipe for this drifted input", drift_profile)
+            candidate, metadata = generate_recipe(
+                args.model,
+                "Repair the active expense recipe for this drifted input",
+                drift_profile,
+                active_recipe=base_recipe,
+                drift_report={
+                    "error_code": "DRIFTED_INPUT",
+                    "message": "The approved recipe was blocked by a deterministic drift check.",
+                },
+            )
         except MoltError as exc:
             print(f"FAIL {exc.code}: {exc.message}")
             return 1

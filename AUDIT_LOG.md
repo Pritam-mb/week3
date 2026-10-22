@@ -409,3 +409,44 @@ This proves the local SDK initialization and redacted span path. Sentry dashboar
 ### Configuration hardening
 
 An empty process environment variable no longer hides a configured non-empty `.env` value. The behavior is covered by `test_empty_process_environment_does_not_hide_env_file_values`.
+
+## Verification-aware Gemma retry update — 2026-10-22
+
+The model-backed compile path now uses one bounded retry budget for provider/schema failures and independent fixture-verification failures. Each schema-valid candidate is persisted and verified before another model call; failed candidates remain rejected for audit, and the active recipe is never changed automatically. Retry feedback contains only bounded stable check codes and generic messages, not CSV values or filesystem paths. The previous candidate is supplied as revision context, and prompt size is bounded.
+
+The default fixture family is selected from the profiled input schema before model calls, so a model-generated recipe name cannot switch verification to an easier fixture family. User-authored stored fixtures still take precedence.
+
+Actual checks after this change:
+
+```text
+python -m unittest discover -s tests -v
+45 tests passed
+
+python -m compileall -q molt tests bench.py
+PASS
+
+node --check molt/web/app.js
+PASS
+
+python bench.py
+PASS — offline fixture benchmark; 2 deterministic calls avoided
+```
+
+Live Gemma was retried against `workspace/in/manual-compatible-test.csv`. The model remained unable to produce a schema-valid recipe within the configured attempts (`RECIPE_SCHEMA_INVALID`, including a malformed `drop_empty_rows` operation). No candidate was persisted or activated. This remains a safe rejection, not live compile success.
+
+Additional live attempts used explicit mappings, decimal precision, duplicate removal, and canonical-value identity mappings. Gemma then produced structurally valid recipes, but independent verification still rejected them because the generated `map_values` mapping omitted the canonical `Food` identity mapping. The active recipe remained unchanged. This confirms the retry and rejection path; it does not establish a live Gemma candidate approval.
+
+Sponsor environment configuration is intentionally limited to local placeholders in `.env.example`:
+
+```text
+SENTRY_DSN=<local-only Sentry DSN, never commit>
+MOLT_TABPFN_ENABLED=false
+MOLT_TABPFN_LICENSE_ACCEPTED=false
+MOLT_TABPFN_MODEL=default
+MOLT_TABPFN_DEVICE=auto
+MOLT_TEMPORAL_ADDRESS=127.0.0.1:7233
+MOLT_TEMPORAL_NAMESPACE=default
+MOLT_TEMPORAL_TASK_QUEUE=molt
+```
+
+No additional sponsor API key is required by the current code. TabPFN requires local package/model-weight and license access rather than an environment token. Temporal requires a reachable local server rather than a sponsor key. The locally configured Sentry DSN should be regenerated if it has been exposed outside the local machine.

@@ -502,12 +502,22 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
             expected_headers, expected_rows = read_csv(expected_path)
             actual_headers, actual_rows = execute_recipe(recipe, headers, rows)
             matches = actual_headers == expected_headers and actual_rows == expected_rows
-            results.append({
+            result = {
                 "fixture": input_path.name,
                 "status": "PASS" if matches else "FAIL",
                 "check": "golden_output",
                 "details": "Output matches independently authored expected CSV." if matches else "Output differs from expected CSV.",
-            })
+            }
+            if not matches:
+                first_difference = next((index for index, (actual, expected) in enumerate(zip(actual_rows, expected_rows)) if actual != expected), None)
+                result["structure"] = {
+                    "actual_rows": len(actual_rows),
+                    "expected_rows": len(expected_rows),
+                    "header_differences": [column for column in sorted(set(actual_headers) | set(expected_headers)) if column not in actual_headers or column not in expected_headers],
+                    "first_difference_row": first_difference + 1 if first_difference is not None else None,
+                    "different_columns": sorted({column for index, (actual, expected) in enumerate(zip(actual_rows, expected_rows)) if actual != expected for column in set(actual) | set(expected) if actual.get(column) != expected.get(column)}),
+                }
+            results.append(result)
             if not matches:
                 continue
             renamed_sources = {operation.get("source") for operation in recipe["operations"] if operation.get("type") == "rename_column"}
@@ -523,7 +533,7 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
                     "details": "Applying the recipe twice produces the same canonical CSV." if idempotent else "Applying the recipe twice changed the output.",
                 })
         except MoltError as exc:
-            results.append({"fixture": input_path.name, "status": "FAIL", "check": exc.code, "details": exc.message})
+            results.append({"fixture": input_path.name, "status": "FAIL", "check": exc.code, "details": exc.message, "context": {key: value for key, value in exc.details.items() if key != "value"}})
     if fixtures:
         input_path, _ = fixtures[0]
         try:
@@ -531,7 +541,7 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
             execute_recipe(recipe, headers, [])
             results.append({"fixture": input_path.name, "status": "PASS", "check": "empty_input", "details": "Header-only input is handled without inventing rows."})
         except MoltError as exc:
-            results.append({"fixture": input_path.name, "status": "FAIL", "check": "empty_input", "details": exc.message})
+            results.append({"fixture": input_path.name, "status": "FAIL", "check": "empty_input", "details": exc.message, "context": {key: value for key, value in exc.details.items() if key != "value"}})
         try:
             reordered_headers = list(reversed(headers))
             reordered_rows = [{column: row.get(column, "") for column in reordered_headers} for row in rows]
@@ -541,7 +551,7 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
             shuffled_membership = sorted(json.dumps(row, sort_keys=True) for row in shuffled_rows)
             results.append({"fixture": input_path.name, "status": "PASS" if original_membership == shuffled_membership else "FAIL", "check": "column_order_invariant", "details": "Column names, not positions, determine transformations."})
         except MoltError as exc:
-            results.append({"fixture": input_path.name, "status": "FAIL", "check": "column_order_invariant", "details": exc.message})
+            results.append({"fixture": input_path.name, "status": "FAIL", "check": "column_order_invariant", "details": exc.message, "context": {key: value for key, value in exc.details.items() if key != "value"}})
         required_columns = recipe["input_contract"]["required_columns"]
         missing_headers = [column for column in headers if column != required_columns[0]]
         missing_rows = [{key: value for key, value in row.items() if key != required_columns[0]} for row in rows]
@@ -549,7 +559,7 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
             execute_recipe(recipe, missing_headers, missing_rows)
             results.append({"fixture": input_path.name, "status": "FAIL", "check": "required_column_guard", "details": "Missing required column was accepted."})
         except MoltError as exc:
-            results.append({"fixture": input_path.name, "status": "PASS" if exc.code == "REQUIRED_COLUMN_MISSING" else "FAIL", "check": "required_column_guard", "details": exc.message})
+            results.append({"fixture": input_path.name, "status": "PASS" if exc.code == "REQUIRED_COLUMN_MISSING" else "FAIL", "check": "required_column_guard", "details": exc.message, "context": {key: value for key, value in exc.details.items() if key != "value"}})
         try:
             if recipe["output_contract"].get("preserve_extra_columns"):
                 renamed_sources = {operation.get("source") for operation in recipe["operations"] if operation.get("type") == "rename_column"}
@@ -558,7 +568,7 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
                 preserved = all(column in result_headers for column in extras)
                 results.append({"fixture": input_path.name, "status": "PASS" if preserved else "FAIL", "check": "extra_column_preservation", "details": "Declared extra columns remain in the output."})
         except MoltError as exc:
-            results.append({"fixture": input_path.name, "status": "FAIL", "check": "extra_column_preservation", "details": exc.message})
+            results.append({"fixture": input_path.name, "status": "FAIL", "check": "extra_column_preservation", "details": exc.message, "context": {key: value for key, value in exc.details.items() if key != "value"}})
     passed = sum(result["status"] in {"PASS", "SKIP"} for result in results)
     failed = sum(result["status"] == "FAIL" for result in results)
     return {"status": "PASS" if failed == 0 else "FAIL", "checks_total": len(results), "checks_passed": passed, "checks_failed": failed, "results": results}
