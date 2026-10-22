@@ -93,7 +93,12 @@ def _env_file_values() -> dict[str, str]:
 
 
 def _value(name: str, values: dict[str, str], default: str) -> str:
-    return os.environ.get(name, values.get(name, default))
+    # An empty process variable is commonly left behind by shell setup and
+    # should not hide a deliberate value from the workspace .env file.
+    process_value = os.environ.get(name)
+    if process_value:
+        return process_value
+    return values.get(name, default)
 
 
 def _int(name: str, values: dict[str, str], default: int) -> int:

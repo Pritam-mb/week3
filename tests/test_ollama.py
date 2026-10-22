@@ -94,6 +94,21 @@ class OllamaTests(unittest.TestCase):
                 if value is None: os.environ.pop(key, None)
                 else: os.environ[key] = value
 
+    def test_empty_process_environment_does_not_hide_env_file_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text("MOLT_GEMMA_MODEL=gemma-from-file\nSENTRY_DSN=https://example.invalid/1\n", encoding="utf-8")
+            original = {key: os.environ.get(key) for key in ("MOLT_ENV_FILE", "MOLT_GEMMA_MODEL", "SENTRY_DSN")}
+            try:
+                os.environ.update({"MOLT_ENV_FILE": str(env_file), "MOLT_GEMMA_MODEL": "", "SENTRY_DSN": ""})
+                config = config_from_workspace(Path(directory) / "workspace")
+                self.assertEqual(config.ollama_model, "gemma-from-file")
+                self.assertEqual(config.sentry_dsn, "https://example.invalid/1")
+            finally:
+                for key, value in original.items():
+                    if value is None: os.environ.pop(key, None)
+                    else: os.environ[key] = value
+
 
 if __name__ == "__main__":
     unittest.main()

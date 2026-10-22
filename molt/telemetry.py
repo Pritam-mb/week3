@@ -119,7 +119,7 @@ class Telemetry:
             return None
         span = None
         try:
-            span = sdk.start_span(op="molt", name=name, description=name)
+            span = sdk.start_span(op="molt", name=name)
             span.__enter__()
             for key, value in attributes.items():
                 self._set_data(span, key, value)

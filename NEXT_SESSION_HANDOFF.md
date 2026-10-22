@@ -172,3 +172,17 @@ final.txt
 - Do not send credentials in chat or commit `.env`.
 - Do not replace SQLite or the deterministic core with an external service.
 - Do not make TabPFN mutate, delete, rewrite, or quarantine rows.
+
+## Live verification update — 2026-10-22
+
+- Ollama `0.40.8` is installed and `gemma3:4b` is available at `http://127.0.0.1:11434`.
+- A real Gemma compile returned a structurally valid recipe, but independent golden/held-out verification rejected it; no model recipe was approved.
+- A real Gemma repair proposal completed with one model call, one attempt, 992 prompt tokens, and 307 response tokens. Full regression verification rejected it; the active recipe was unchanged.
+- The local `.env` now has a Sentry DSN. It is ignored by Git and must not be copied into docs or chat again.
+- A real Sentry SDK smoke workflow initialized successfully, completed a deterministic run with zero model calls, and emitted nine redacted spans. Dashboard receipt was not independently inspected.
+- Empty process environment variables were fixed so they no longer hide non-empty `.env` values; this has a regression test.
+- Full regression suite after these changes: 35 tests passed. Compileall, browser JavaScript syntax check, and offline benchmark passed.
+
+### Next concrete step
+
+Keep the Gemma candidate/repair inactive unless a human reviews a candidate that passes the full fixture suite. If sponsor evidence is still needed, inspect the Sentry dashboard for the redacted smoke trace without exposing row data. Do not enable TabPFN until the supported labeled task, license/model-weight access, and safe feature columns are explicitly confirmed.

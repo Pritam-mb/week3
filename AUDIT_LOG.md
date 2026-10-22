@@ -66,7 +66,7 @@ The environment/sanity gap identified during the latest audit is now addressed:
 - `MoltService.health()` checks Ollama `/api/tags` and distinguishes `ready`, `model_missing`, and `unreachable`.
 - Ollama requests use a canonical schema, masked profile context, configurable timeout/retry/response limits, and active-recipe/drift context for repair.
 - Server startup reports `SERVER_ALREADY_RUNNING` or `SERVER_BIND_FAILED` instead of silently failing.
-- This machine currently has no reachable Ollama service, so live Gemma generation remains unverified. That is an external setup gap, not fixture evidence.
+- Ollama is now reachable at `http://127.0.0.1:11434` with `gemma3:4b` installed; live compile and repair attempts are recorded below.
 
 ## Requirements from `workflow.md`
 
@@ -87,8 +87,8 @@ The environment/sanity gap identified during the latest audit is now addressed:
 - [x] Full regression verification before repair approval.
 - [x] Previous recipe versions retained for audit and recovery.
 - [~] Browser upload, profiling, compile selection, preview, verification, and approval path is wired; structured recipe editing and fixture-management screens remain to be finished.
-- [ ] Live Gemma/Ollama compile evidence on this machine; `doctor` confirms the endpoint is currently unreachable.
-- [ ] Full Sentry trace evidence on this machine; the redacted adapter and mocked-SDK tests pass, but no real DSN trace was run.
+- [x] Live Gemma/Ollama compile evidence on this machine; a real candidate was generated and then rejected by independent verification.
+- [x] Live Sentry SDK trace path; a real DSN initialized the SDK and a smoke workflow emitted nine redacted spans. Dashboard receipt was not independently inspected.
 - [ ] TabPFN anomaly evidence on an eligible dataset; the supervised advisory adapter and tests pass, but no real model-weight inference was run.
 - [ ] Live Temporal server/worker workflow evidence; the optional adapter and no-SDK behavior tests pass, but no Temporal server was available.
 
@@ -345,9 +345,9 @@ EXPECTED FAIL — TEMPORAL_UNAVAILABLE because the optional SDK/server is not in
 
 | Integration | Code/tests | Live external evidence | Current status |
 |---|---:|---:|---|
-| Gemma through Ollama | Yes | No | Not ready on this machine; Ollama is unreachable |
+| Gemma through Ollama | Yes | Yes | Live compile and repair calls ran; verification rejected the generated candidates |
 | TabPFN | Yes, optional advisory supervised path | No | Requires explicit license/access setup and real model-weight inference |
-| Sentry Agent Tracing | Yes, redacted and non-blocking | No | Disabled/local-only; no real DSN trace was sent |
+| Sentry Agent Tracing | Yes, redacted and non-blocking | Yes | Real DSN initialized the SDK; nine redacted smoke-workflow spans emitted; dashboard receipt not inspected |
 | Temporal | Yes, optional durable boundary | No | Requires `temporalio`, a Temporal server, and a worker |
 
 ### What is needed from the user
@@ -371,4 +371,41 @@ Do not send credentials in chat or commit them to the repository. Configure them
 
 ### Session status
 
-The project is saved in the single workspace `D:\week3`. The local server is running at `http://127.0.0.1:8765/`. The deterministic core is tested. Live sponsor integrations are implemented as optional boundaries but are not falsely marked as demonstrated.
+The project is saved in the single workspace `D:\week3`. The local server is running at `http://127.0.0.1:8765/`. The deterministic core is tested. Live Gemma and Sentry SDK paths now have bounded local evidence; TabPFN and Temporal remain unverified.
+
+## Live integration update — 2026-10-22
+
+### Ollama/Gemma
+
+Readiness and model installation:
+
+```text
+ollama version 0.40.8
+gemma3:4b installed
+python -m molt --state-dir workspace doctor --require-ollama
+PASS — server and configured model ready
+```
+
+A real compile against `workspace/in/expense-demo.csv` returned a validated recipe from `gemma3:4b`. The first candidate failed Molt's independent golden/held-out verification and was not approved. A real repair proposal also completed with one model call, one attempt, 992 prompt tokens, and 307 response tokens; its regression verification rejected it. No generated recipe was activated.
+
+### Sentry
+
+The local `.env` contains the DSN and remains ignored by Git. A configuration smoke check reported `sentry_configured=true`, `sentry_enabled=true`, and `mode=sentry`. A fixture-backed service workflow with the real configured SDK completed successfully with `model_calls=0`, verification `PASS`, and nine emitted redacted spans:
+
+```text
+automation.check_drift
+automation.execute_approved_recipe
+automation.profile_csv
+recipe.approve_version
+recipe.compile
+recipe.validate_operations
+recipe.validate_schema
+recipe.verify_examples
+recipe.verify_invariants
+```
+
+This proves the local SDK initialization and redacted span path. Sentry dashboard receipt was not independently inspected, and the DSN must never be committed or copied into project documentation.
+
+### Configuration hardening
+
+An empty process environment variable no longer hides a configured non-empty `.env` value. The behavior is covered by `test_empty_process_environment_does_not_hide_env_file_values`.
