@@ -1,0 +1,3 @@
+transaction_id,date,merchant,amount,category,notes
+t-101,2026-10-10,  Lunch Spot,"2,050.00",food & drink,held out
+t-102,10/11/2026,Bus,7.5,transit,held out

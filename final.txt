@@ -1,0 +1,390 @@
+Molt — Final Product Brief, Showcase Plan, and Build Prompt
+Product thesis
+Molt: Teach once. Verify before trusting. Reuse without repeated inference.
+
+Molt is a local-first, verified CSV automation tool for recurring cleanup and normalization work. A user describes the desired transformation in natural language. An open-weight model proposes a constrained JSON recipe. Molt validates and tests that recipe against explicit examples and deterministic rules. A human approves the recipe before it becomes active. Compatible future CSV files run through the verified recipe without another model call. If the input changes or a precondition fails, Molt blocks the run and proposes a repair for testing and human approval.
+Original motive
+People repeatedly clean the same types of CSV exports: orders, expenses, registrations, inventory, customers, and operational reports. Repeating the task manually wastes time; handwritten scripts become brittle; using an LLM every time adds latency, cost, inconsistency, and avoidable data exposure.
+
+Molt's core idea is to use AI for planning, not for every repeated execution. AI translates intent into a recipe; ordinary code performs the transformation; tests and invariants provide evidence; a person approves changes.
+What is in scope
+Supported file type
+- CSV input and CSV output only.
+- UTF-8 input; document supported delimiter and encoding behavior.
+- Preview a bounded sample and profile the complete file within configured size/row limits.
+- Preserve the original file. Write output to a new file using a temporary file and atomic rename after successful completion.
+Supported recipe operations
+1. Trim whitespace.
+2. Rename columns.
+3. Normalize case (upper/lower/title, only where semantics are clear).
+4. Map values using explicit mappings.
+5. Parse dates using explicit formats or a user-confirmed format.
+6. Parse decimals using explicit locale/decimal-separator settings where ambiguity exists.
+7. Split columns using a specified delimiter and target columns.
+8. Deduplicate rows using explicitly selected key columns or full-row comparison.
+9. Filter rows using allowlisted operators and typed values.
+10. Select/reorder columns.
+11. Remove empty rows according to a documented definition.
+12. Fill missing values using explicit constants or supported rules.
+13. Validate values against declared constraints (required, allowed values, type, range, pattern where safely supported).
+Every operation must have a typed schema, defined input requirements, defined output behavior, and explicit failure behavior. Do not pass arbitrary Python, JavaScript, shell commands, expressions, or executable code from the model to the runner.
+Not in scope
+- General-purpose AI agent or arbitrary code generator.
+- Browser automation.
+- Excel, PDF, SQL database, or API automation.
+- Automatic discovery of every business rule.
+- Silent auto-repair or auto-promotion of changed recipes.
+- Multi-user enterprise workflow management.
+- Mandatory Temporal, Mastra, MongoDB Atlas, Tiger Data, or additional orchestration/database services in the MVP.
+Core user journey
+1. Create automation: user uploads a CSV and describes the transformation in natural language.
+2. Profile input: Molt presents columns, inferred types, null rates, examples with sensitive values masked where configured, duplicate counts, and basic statistics. The sample should be bounded; do not send an entire file to the model.
+3. Generate recipe: local Gemma via Ollama proposes a JSON recipe using only supported operations. The model also identifies assumptions and ambiguities.
+4. Validate recipe structure: validate with a strict schema, operation allowlist, column references, type compatibility, and resource limits. Reject unknown operations or malformed fields.
+5. Test and preview: run the recipe in a deterministic sandbox against a small preview and a test suite containing user-supplied expected examples, edge cases, and invariants. Show before/after output and a clear test report.
+6. Resolve ambiguity: if date formats, decimal conventions, duplicate keys, missing-value policy, or mapping semantics are ambiguous, ask the user or leave the recipe blocked. Do not guess silently.
+7. Approve version: user explicitly approves the tested recipe version. Record version, recipe hash, approval timestamp, and test report.
+8. Reuse: compatible future CSV files are processed by the active recipe with zero LLM calls. Show the LLM call count for the run.
+9. Detect drift: compare incoming headers, required columns, configured types, profile ranges, and operation preconditions with the recipe's requirements. If incompatible, stop execution, preserve the input, and place the run in a review/quarantine state.
+10. Propose repair: Gemma may propose a new recipe version. Run the complete regression suite and new-input checks. Never make it active until a human approves it.
+11. Audit and savings: record execution status, recipe version/hash, rows processed, test result, model calls, durations, warnings, and whether human intervention was required.
+Recipe format
+Use a versioned JSON document with a strict schema. Example shape:
+{
+  "recipe_version": 1,
+  "name": "Normalize monthly orders export",
+  "description": "Trim values, standardize status, parse dates, and select output columns.",
+  "input_contract": {
+    "required_columns": ["Order ID", " Status ", "Order Date"],
+    "date_formats": {"Order Date": "%Y-%m-%d"},
+    "decimal_conventions": {},
+    "allow_extra_columns": true
+  },
+  "operations": [
+    {"op": "trim_whitespace", "columns": [" Status "]},
+    {"op": "rename_columns", "mapping": {"Order ID": "order_id", " Status ": "status", "Order Date": "order_date"}},
+    {"op": "normalize_case", "columns": ["status"], "mode": "lower"},
+    {"op": "parse_dates", "columns": ["order_date"], "formats": {"order_date": "%Y-%m-%d"}},
+    {"op": "select_columns", "columns": ["order_id", "status", "order_date"]}
+  ],
+  "postconditions": [
+    {"type": "required_columns", "columns": ["order_id", "status", "order_date"]},
+    {"type": "no_new_nulls", "columns": ["order_id"]}
+  ]
+}
+This is only an illustrative schema. The implementation must define every operation's exact arguments and behavior. Do not let the model define executable conditions outside the allowlisted schema. If the recipe schema or operation signatures change, increment the recipe version and test compatibility.
+Verification and drift rules
+Verification before approval
+- Strict recipe schema validation.
+- Verify that referenced columns exist at the relevant point in the operation sequence.
+- Validate compatible operation order and parameter types.
+- Run deterministic fixtures with known expected outputs.
+- Check declared postconditions/invariants.
+- Include edge cases: empty file, header-only file, missing column, empty string, whitespace-only value, malformed date, invalid decimal, duplicate key, delimiter edge case, unexpected value, and mixed casing.
+- Compare actual output with expected output for each fixture.
+- Keep regression fixtures for every approved change.
+- Test idempotence only for operations or recipes explicitly declared idempotent; do not assume every operation can be safely applied twice.
+- Provide a clear report containing pass/fail, the failing row/column or anonymized location, and the reason.
+Drift detection
+Molt should detect only declared and measurable forms of drift, such as:
+- required columns missing or renamed;
+- unexpected column/type changes where the input contract says they matter;
+- configured value formats becoming invalid;
+- operation preconditions failing;
+- postconditions failing;
+- data profiles crossing user-defined limits.
+Do not claim to detect every semantic change. A drifted file must not silently produce a successful final output. It can be quarantined or receive an explicitly marked diagnostic preview, but the app must clearly distinguish that preview from approved output.
+Ground truth
+Include example CSV files and hand-authored expected output fixtures in the repository. Demo orders and expense exports are illustrative fixtures, not hard-coded product types. The product should work on any CSV that can be expressed with its supported operations.
+Architecture decisions
+- Frontend: React + TypeScript + Vite. Keep the UI simple and legible; no unnecessary animation or complex dashboard framework.
+- Backend: Python + FastAPI.
+- CSV engine: Python standard library csv plus typed transformation functions. Prefer transparent deterministic functions over opaque dataframe magic for the core runner.
+- Recipe schema: Pydantic models or an equally strict validated schema.
+- Local AI: Ollama with a configurable Gemma model name and base URL. Handle model unavailable, timeout, invalid JSON, and response truncation gracefully.
+- Persistence: SQLite for recipes, versions, approvals, fixture references, runs, drift incidents, and metrics.
+- Tests: pytest for operation unit tests, schema tests, integration tests, regression fixtures, and API tests.
+- Observability: Sentry SDK/Agent Tracing for non-sensitive spans where configured. Keep telemetry useful without recording raw CSV rows, full prompts containing sensitive data, or secrets.
+- Optional anomaly module: a separate TabPFN adapter behind a feature flag. It may return advisory anomaly signals only when the model and dependency are available and the selected data is suitable. It must not block deterministic validation or modify rows. If it is unavailable, core Molt must keep working.
+Do not introduce a second database or workflow orchestrator for the sake of sponsor count. SQLite is sufficient for the local MVP. Do not add Mastra if it merely duplicates the explicit, testable workflow. Do not add Temporal unless there is a real durable, interruptible multi-step workflow need that the simple service cannot meet.
+Suggested repository structure
+molt/
+  README.md
+  LICENSE
+  .env.example
+  docker-compose.yml                 # optional local setup for API/UI; Ollama documented separately if needed
+  backend/
+    app/
+      main.py
+      api/
+      core/
+        config.py
+        errors.py
+        security.py
+      recipes/
+        schema.py
+        validator.py
+        registry.py
+        versioning.py
+      csv_engine/
+        profiler.py
+        parser.py
+        operations.py
+        runner.py
+        drift.py
+      ai/
+        ollama_client.py
+        recipe_generator.py
+        repair_proposer.py
+      verification/
+        fixtures.py
+        test_runner.py
+        invariants.py
+      persistence/
+        database.py
+        models.py
+        repositories.py
+      integrations/
+        sentry_tracing.py
+        tabpfn_anomaly.py              # optional, isolated adapter
+      services/
+        automation_service.py
+        execution_service.py
+        metrics_service.py
+    tests/
+      unit/
+      integration/
+      fixtures/
+  frontend/
+    src/
+      components/
+      pages/
+      api/
+      types/
+  examples/
+    orders_input.csv
+    orders_expected.csv
+    expenses_input.csv
+    expenses_expected.csv
+    drifted_orders.csv
+  docs/
+    architecture.md
+    recipe-format.md
+    privacy.md
+    demo-script.md
+Adjust the structure if the repository's existing state calls for it, but preserve separation between AI proposals, recipe validation, deterministic execution, persistence, and UI.
+API surface
+Use typed request/response models and meaningful error status codes. Exact route names can vary, but implement equivalent functionality for:
+- GET /health — service health and model availability, without exposing secrets.
+- POST /api/files/profile — profile an uploaded CSV safely.
+- POST /api/recipes/propose — send a bounded profile and user instruction to Gemma and return a candidate recipe plus assumptions.
+- POST /api/recipes/validate — validate structure, allowlisted operations, column references, and preconditions.
+- POST /api/recipes/test — run fixtures and a preview; return a structured verification report.
+- POST /api/recipes/{id}/approve — approve an exact recipe version/hash only after required tests pass.
+- GET /api/recipes and GET /api/recipes/{id} — list and inspect recipes and versions.
+- POST /api/automations/{id}/run — execute an approved recipe against a new CSV if it satisfies its input contract.
+- GET /api/runs and GET /api/runs/{id} — execution history and details.
+- POST /api/automations/{id}/repair-proposal — propose a new version after drift; must not promote it automatically.
+- POST /api/repair-proposals/{id}/approve — promote the specific repaired version only after all required checks pass and an authorized user approves it.
+Never trust a client-supplied recipe ID, path, or approval flag without server-side verification. Avoid arbitrary filesystem paths from the client; use generated server-side file IDs and a configured working directory.
+UI screens
+1. Home / Automations: list recipe name, status, latest run, recipe version, and model calls avoided.
+2. New automation: upload CSV, enter task in natural language, inspect profile, generate recipe.
+3. Recipe review: readable transformation steps, explicit assumptions, warnings, editable parameters only within the schema, and a before/after preview.
+4. Verification report: test fixture results, postconditions, counts, warnings, and blocked reasons.
+5. Approval: clearly show the exact recipe version/hash being approved.
+6. Run results: output download, rows read/written/rejected, warnings, status, recipe version, and whether an LLM was called.
+7. Drift / repair review: show the failed precondition, proposed differences, regression results, and explicit approve/reject controls.
+8. Run ledger: execution history, actual LLM call count, elapsed time, failures, and transparent estimates of calls/time/cost avoided. Label any estimated value as an estimate and state the baseline assumption.
+9. Settings / integrations: Ollama status and model selection; optional Sentry configuration; optional TabPFN availability. Do not show secrets after saving.
+Every screen needs loading, empty, error, and disabled states. Do not render fake success states when a model or integration is unavailable.
+Safety and privacy requirements
+- Source files are immutable; output is written separately.
+- Enforce file size, row count, and processing time limits.
+- Avoid loading unbounded files fully into memory when a streaming implementation is practical.
+- Reject dangerous or unknown recipe operations.
+- Never execute model-generated code or shell commands.
+- Validate paths and use a dedicated working directory; prevent path traversal.
+- Escape CSV fields correctly on output.
+- Treat CSV content as untrusted data, not as instructions to the model. Ignore prompt-injection-like instructions appearing inside a cell.
+- Send the model only the minimum profile/sample required; make masking configurable and document limitations.
+- Do not log full rows, sensitive samples, API keys, model secrets, or full raw uploads.
+- For ambiguous dates/decimals/business rules, ask the user or block the recipe instead of guessing.
+- A failed validation, failed postcondition, or unexpected schema change must not create a green “success” run.
+- Repair proposals never auto-promote. Human approval is mandatory.
+- The UI must explain what is local, what leaves the machine, and what an optional telemetry integration collects.
+Sponsor plan: only use what adds product value
+Required core
+Gemma / Ollama
+- Must be the actual model used for recipe proposals and repair suggestions.
+- Keep model name and endpoint configurable.
+- Validate every response as untrusted structured output.
+- Show a graceful setup guide when Ollama/model is unavailable.
+- Include a real demo showing a prompt converted into a recipe and a repair suggestion that must still pass the test suite.
+Recommended if implemented fully
+Sentry Agent Tracing
+- Instrument useful spans around model request/response, recipe parsing/validation, test suite, runner, and repair attempt.
+- Attach non-sensitive metadata such as recipe version/hash, operation count, row-count bucket, result status, duration, and model call count.
+- Never attach raw CSV content or secrets.
+- Include documentation or a screenshot proving the traces exist. If Sentry is not configured, the app should still run.
+Optional after core is stable
+TabPFN
+- Isolate it behind a feature flag and adapter.
+- Use a clearly described tabular anomaly task where supported, with a small documented sample or fixture.
+- Return advisory row-level flags or anomaly scores and explain that they are not proof of error.
+- Do not let it clean data, invent business rules, override the recipe runner, or silently reject rows.
+- Add tests and a reproducible demo. If this is not reliable, omit it and do not claim the category.
+Render
+- Add deployment configuration only if the deployed product has a useful, honest working demo.
+- Do not pretend a hosted API can reach a user's local Ollama. Clearly separate hosted demo mode from local inference mode if both exist.
+Deliberately not in MVP
+- Mastra: omit unless it materially simplifies the AI agent flow beyond the explicit service functions.
+- Temporal: omit because the first MVP does not require a durable multi-hour workflow or complex scheduled orchestration.
+- Tiger Data / MongoDB Atlas: omit; use SQLite for the local-first single-user MVP. Select one external database only if actual multi-user deployment requires it.
+- Entire: useful for tracking AI-assisted development, but not a core user-facing capability. Do not present it as product integration unless it provides a demonstrable user benefit.
+- Auth0 / Browserbase / ElevenLabs / SerpApi / Arduino / Tinker / DigitalOcean: omit unless a concrete user need emerges. No decorative integrations.
+Only list sponsor prize categories in the submission post for technologies that are genuinely implemented, documented, and demonstrable. Use the official Week 3 page to confirm the current category list before submitting.
+Evaluation plan and metrics
+Build a repeatable benchmark with fixed CSV inputs, user tasks, expected outputs, and drifted inputs. Compare:
+- Baseline A: use an LLM for every file/run.
+- Baseline B: a fixed manual script for the known sample only.
+- Molt: compile one recipe, test and approve it, then reuse it on compatible inputs and block drift.
+Measure and report actual results:
+- LLM calls per N compatible runs.
+- Number and percentage of fixtures that pass expected-output comparison.
+- Unsafe/invalid recipes blocked before execution.
+- Drifted files correctly blocked in the test suite.
+- Repair proposals that pass regression tests (not just generated proposals).
+- Failed runs and false-positive drift warnings on the benchmark.
+- Execution time and model latency where captured.
+- Human approvals required and total user steps for initial setup vs reuse.
+- Estimated tokens or cost only when actual token data or a disclosed calculation method exists; label estimates clearly.
+Never claim guaranteed correctness. Report the exact fixture set and sample size. Do not advertise “zero silent errors” unless the benchmark and definition make that statement demonstrably true.
+Final showcase checklist
+The demo must show a coherent story in this order:
+1. The repetitive problem: a messy CSV and a short natural-language cleanup request.
+2. The AI planning moment: Gemma proposes a constrained JSON recipe, visibly showing that the model is not generating executable code.
+3. The trust boundary: the user sees assumptions, preview changes, and explicit verification results.
+4. Ground-truth proof: at least one expected-output fixture and several edge-case checks pass; show a failing case too if useful.
+5. Human approval: approve a specific tested recipe version.
+6. Slow-and-steady payoff: run a second compatible CSV with the approved recipe and show LLM calls: 0 for that execution.
+7. Drift failure: supply a changed/malformed input; show Molt stop or quarantine it rather than silently producing an approved output.
+8. Reviewed repair: Gemma proposes a new version; regression tests run; user approves or rejects it; no auto-promotion occurs.
+9. Evidence, not decoration: show the run ledger and, if implemented, a real Sentry trace. Show TabPFN only if it genuinely runs and the advisory nature is clear.
+10. Open innovation and privacy: explain local open-weight inference, no dependence on a paid hosted model API in local mode, and the exact data/telemetry boundaries.
+11. Repository quality: README quickstart, sample files, expected outputs, architecture diagram, recipe schema, tests, environment example, license, and a short demo recording or working deployment.
+Suggested concise demo narration:
+“This CSV cleanup repeats every week. Usually I redo the work, maintain another fragile script, or ask an AI model again. Molt uses an open-weight model to propose a transformation recipe once, then tests that recipe against known examples and rules. I approve the version. On a compatible file, the transformation runs deterministically with zero additional model calls. When the input changes, Molt stops and requests a reviewed repair instead of guessing. The AI proposes; verification decides whether it is safe to review; I decide whether it becomes active.”
+
+Definition of done
+The MVP is ready to showcase only when all applicable items below work end-to-end:
+- A natural-language request can produce a valid recipe from a configured local Gemma model.
+- Unsupported instructions, ambiguous formats, invalid recipe JSON, and unknown operations are rejected or routed to clarification.
+- Supported transformations run deterministically against CSVs and produce expected outputs.
+- Recipe verification report is based on actual tests, not mocked results.
+- User must explicitly approve a passing recipe version.
+- A compatible subsequent input runs without a model call, and that fact is recorded.
+- An incompatible/drifted input is blocked/quarantined and cannot become a successful approved output.
+- A repair is a new version that must pass the complete regression suite and human approval before use.
+- Source file remains unchanged; no arbitrary generated code is executed.
+- Run history and truthful savings metrics persist across restarts.
+- Automated tests cover operations, recipe validation, drift, approvals, errors, and API behavior.
+- README setup instructions work from a clean checkout, including model installation/configuration and limitations.
+- Optional sponsors are either genuinely integrated and documented or removed from claims.
+Copy/Paste Master Build Prompt
+You are the senior engineer responsible for building Molt, a polished but tightly scoped local-first verified CSV automation product. Build the actual working application, not just a proposal, mockup, or architecture document. Treat the product requirements below as the source of truth. Do not ask follow-up questions; make conservative implementation choices, document them, and prioritize correctness and a working end-to-end path over unnecessary features.
+Mission
+Molt helps users automate recurring CSV cleanup and normalization. A user describes a task in natural language. A local open-weight Gemma model, accessed through Ollama, proposes a versioned JSON recipe. Molt validates and tests that recipe with deterministic code and known expected outputs. A human must approve the exact tested version. Future compatible CSVs execute deterministically with zero LLM calls. When schema, formatting, or preconditions drift, Molt blocks or quarantines the run and can ask Gemma to propose a repaired version. The repair must pass the full regression suite and receive human approval before activation.
+
+The product thesis is “Teach once. Verify before trusting. Reuse without repeated inference.” The open-innovation argument is that local open-weight inference makes the planning step inspectable and usable without sending CSV data to a paid hosted AI API by default, while deterministic code and regression tests make repeated execution more predictable and auditable.
+Technology choices
+- Frontend: React, TypeScript, Vite.
+- Backend: Python, FastAPI.
+- Validation: Pydantic or an equally strict typed schema.
+- CSV execution: Python csv module and explicit deterministic operation functions.
+- Local model: Ollama, configurable Gemma model name and base URL.
+- Database: SQLite for recipes, recipe versions, approvals, test results, run history, drift incidents, and metrics.
+- Testing: pytest.
+- Sponsor integrations: Gemma is the required core integration. Add Sentry Agent Tracing only with useful non-sensitive spans. TabPFN is an optional advisory anomaly plugin behind a feature flag and must not be required by the core path. Do not add Mastra, Temporal, Tiger Data, MongoDB Atlas, or Entire unless you can demonstrate a specific requirement they solve better than the simple architecture. Do not add fake integrations or claim categories without working evidence.
+Scope boundaries
+CSV in, CSV out. Support trim whitespace, rename columns, normalize case, map values, parse dates with explicit formats, parse decimals with explicit conventions, split columns, deduplicate rows with explicit keys, filter rows using an allowlist, select/reorder columns, remove empty rows with a documented definition, fill missing values using explicit rules, and validate values against declared constraints. Keep the exact operation parameters typed, tested, and documented.
+
+Do not build a general-purpose agent, arbitrary code generator, browser automation tool, Excel/PDF/SQL automation product, or automatic business-rule discoverer. Never execute model-generated Python, JavaScript, shell, SQL, or arbitrary expressions. The model can propose only a constrained JSON recipe composed of allowlisted operations.
+Required workflow
+1. Upload a CSV and enter a natural-language task.
+2. Profile headers, types, null rates, duplicate counts, and a bounded sample. Mask or omit sensitive values as appropriate; do not send the entire file to the model.
+3. Ask local Gemma to return a candidate JSON recipe plus assumptions and ambiguities.
+4. Validate the response strictly: schema, operation allowlist, valid column references, parameter types, operation order, resource limits, and input contract.
+5. If important semantics are ambiguous (date formats, decimal separators, dedupe keys, mapping rules, missing-value policy), ask the user or block the recipe; do not guess silently.
+6. Run deterministic preview and regression fixtures with expected outputs, edge cases, and postconditions. Return real pass/fail results.
+7. Require user approval of a specific recipe version/hash after required checks pass.
+8. Execute the approved recipe on compatible future CSVs without calling the LLM. Record the actual model-call count as zero for that run.
+9. Detect measurable drift using required-column checks, configured types/formats, operation preconditions, profile bounds where configured, and postconditions. On drift, stop or quarantine the run; do not write a green-success output.
+10. Permit Gemma to suggest a repair only as a new draft version. Run all existing regression tests plus new-input tests. Human approval is mandatory before promotion.
+11. Store recipe versions, approvals, run reports, drift incidents, metrics, and output metadata in SQLite.
+Verification requirements
+Include known input/output fixtures for both an orders-style CSV and an expenses-style CSV. These are examples, not hard-coded special cases. Add tests for malformed dates, invalid decimals, missing/extra columns, empty input, header-only input, blank cells, whitespace-only strings, duplicate keys, unexpected values, split delimiters, invalid recipe fields, unsupported operations, drift behavior, failed verification, approval enforcement, and model unavailable/timeout/invalid JSON.
+
+Verification should check expected outputs and declared invariants such as required columns, allowed values, no newly introduced nulls on specified fields, row-count conditions, uniqueness of declared keys, and parse success. Apply idempotence tests only to operations explicitly declared idempotent. Do not claim universal correctness. Maintain the full regression suite across recipe changes.
+Safety and reliability
+- Preserve source files; write output to a new file through a temporary file and atomic replacement after success.
+- Enforce file size, row-count, and processing-time limits.
+- Prevent path traversal and arbitrary filesystem access; use generated file IDs and a configured working directory.
+- Treat cell contents as untrusted data, not instructions to the model.
+- Do not log raw CSV rows, secrets, API keys, or full prompts that may contain personal data.
+- Configure meaningful errors and graceful fallbacks when Ollama or an optional sponsor integration is unavailable.
+- A validation failure, postcondition failure, unexpected schema change, or unreviewed repair must never be represented as successful approved output.
+- Repairs must never auto-promote.
+UI requirements
+Build a clean, responsive interface with:
+- Automation list and current recipe version/status.
+- New automation flow: upload, instructions, input profile, recipe proposal.
+- Recipe review with readable steps, assumptions, before/after preview, and warnings.
+- Verification report with actual fixture outcomes, postconditions, and failure details.
+- Explicit approval control for a precise recipe version.
+- Run results with output download, row counts, status, warnings, runtime, recipe hash/version, and model-call count.
+- Drift/repair review comparing old vs proposed version, displaying regression outcomes and approve/reject controls.
+- Run ledger showing actual runs, LLM calls avoided, failures, and clearly labeled estimates.
+- Settings for Ollama model/endpoint and optional Sentry/TabPFN configuration.
+Implement loading, empty, error, and unavailable states. Do not use fake success data in the real workflow. A small amount of seeded demo history may be used only if clearly marked as demo data and separated from actual run records.
+API and persistence
+Implement typed API endpoints equivalent to:
+- GET /health
+- POST /api/files/profile
+- POST /api/recipes/propose
+- POST /api/recipes/validate
+- POST /api/recipes/test
+- POST /api/recipes/{id}/approve
+- GET /api/recipes and GET /api/recipes/{id}
+- POST /api/automations/{id}/run
+- GET /api/runs and GET /api/runs/{id}
+- POST /api/automations/{id}/repair-proposal
+- POST /api/repair-proposals/{id}/approve
+A request to approve or run must be authorized by server-side state checks, never by trusting a client flag. Persist versions and run results across application restarts.
+Sponsor requirements
+Gemma: actually call the configured local Gemma model for recipe proposals and repair suggestions. Parse outputs as untrusted input and validate them. Handle invalid JSON and unavailable models. The demo must show actual model output transformed into a safe recipe.
+
+Sentry Agent Tracing: if configured, instrument spans for model calls, parsing, validation, fixture tests, execution, and repair. Include only non-sensitive metadata (status, duration, operation count, model call count, hashed recipe identifier, and coarse row-count buckets). Never attach raw CSV content. Include setup docs. Core Molt must still run without Sentry.
+
+TabPFN (optional): implement only if the dependency and supported use case can be made reproducible. Use an adapter/feature flag and return advisory anomaly flags. It must not modify data or override deterministic tests. If unavailable or unsuitable, show an accurate disabled state and keep the core workflow unaffected. If it cannot be demonstrated reliably, leave it out and do not claim the sponsor category.
+
+Hosting: do not claim Render or another hosting sponsor unless the actual hosted product is working. A hosted service cannot automatically reach the user's local Ollama; document local versus deployed modes honestly.
+
+Do not integrate Mastra, Temporal, Tiger Data, MongoDB Atlas, Entire, Auth0, Browserbase, ElevenLabs, SerpApi, Arduino, Tinker, or other vendors just to increase category count. Prefer a minimal, coherent, and tested architecture.
+Evaluation and showcase
+Build an evaluation that compares: (A) using an LLM on every run, (B) a fixed script for one known file, and (C) Molt's compile/verify/approve/reuse approach. Report measured results for compatible-run model calls, output correctness on provided fixtures, drift-blocking behavior, regression failures, repair acceptance results, latency, and user steps. Explain any baselines, and label cost/token values as estimates unless measured from real data.
+
+The final demo should show, in order:
+1. A messy CSV and the repetitive cleanup problem.
+2. A natural-language instruction converted by local Gemma into a constrained recipe.
+3. The profile, assumptions, preview, and test results.
+4. Human approval of a tested recipe version.
+5. A second compatible CSV processed with zero additional LLM calls.
+6. A drifted CSV blocked or quarantined.
+7. A proposed repair tested against the complete regression suite and awaiting approval.
+8. A truthful run ledger; actual Sentry traces if implemented; TabPFN anomaly warnings only if working.
+9. The privacy/open-innovation rationale and a repository quickstart.
+Engineering instructions
+First inspect the repository and reuse existing conventions where sensible. Then implement the backend, deterministic engine, model adapter, persistence, frontend, and tests as one connected workflow. Keep modules small and typed. Run tests and fix failures rather than merely reporting them. Add .env.example, a useful README, supported recipe schema documentation, privacy notes, sample CSV fixtures with expected outputs, and reproducible local setup instructions. Include a clean failure mode when Ollama is missing. Avoid unnecessary abstraction and do not introduce dependencies unless justified.
+
+Before finishing, summarize what is implemented, exact commands to install/run/test it, required model setup, optional integrations and their status, and any limitations. Never claim an integration, test, benchmark, or deployment is complete unless you verified it in the repository and runtime.

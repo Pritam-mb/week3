@@ -1,0 +1,5 @@
+order_id, Customer Name ,status,order_date,notes
+o-001,  Alice Smith  ,Completed,2026-10-01,first order
+o-002,Bob Jones,done,01/10/2026,second order
+o-002,Bob Jones,done,01/10/2026,duplicate
+o-003,Carol Lee,complete,2026-10-03,third order

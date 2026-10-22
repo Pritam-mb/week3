@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "name": "normalize_weekly_orders",
+  "description": "Normalize names, statuses, dates, and duplicate order IDs.",
+  "input_contract": {
+    "required_columns": ["order_id", " Customer Name ", "status", "order_date"],
+    "allow_extra_columns": true,
+    "required_types": {"order_id": "string", " Customer Name ": "string", "status": "string", "order_date": "string"}
+  },
+  "operations": [
+    {"type": "trim", "columns": [" Customer Name ", "status"]},
+    {"type": "rename_column", "source": " Customer Name ", "destination": "customer_name"},
+    {"type": "normalize_case", "columns": ["status"], "mode": "lower"},
+    {"type": "map_values", "column": "status", "mapping": {"complete": "completed", "completed": "completed", "done": "completed"}, "on_unmapped": "fail"},
+    {"type": "coerce_date", "column": "order_date", "input_formats": ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"], "output_format": "%Y-%m-%d", "on_error": "fail"},
+    {"type": "dedupe", "key_columns": ["order_id"], "keep": "first"},
+    {"type": "reorder_columns", "columns": ["order_id", "customer_name", "status", "order_date"], "preserve_extra_columns": true}
+  ],
+  "output_contract": {"required_columns": ["order_id", "customer_name", "status", "order_date"], "preserve_extra_columns": true, "preserve_source_file": true},
+  "verification_policy": {"require_golden_tests": true, "require_regression_tests": true, "require_idempotence_if_applicable": true}
+}

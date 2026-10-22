@@ -1,0 +1,5 @@
+transaction_id,date,merchant,amount,category,notes
+t-001,10/01/2026,  Coffee Shop  ,"1,200.50",food & drink,team breakfast
+t-002,2026-10-02, Metro ,12.00,transit,commute
+t-002,2026-10-02,Metro,12.00,transit,duplicate export row
+t-003,10/03/2026,Book Store,45.5,books,reading

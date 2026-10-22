@@ -1,0 +1,4 @@
+order_id,customer_name,status,order_date,notes
+o-001,Alice Smith,completed,2026-10-01,first order
+o-002,Bob Jones,completed,2026-01-10,second order
+o-003,Carol Lee,completed,2026-10-03,third order

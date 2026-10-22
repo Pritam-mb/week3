@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "name": "normalize_expense_export",
+  "description": "Normalize a synthetic expense export without changing unrelated columns.",
+  "input_contract": {
+    "required_columns": ["transaction_id", "date", "merchant", "amount", "category"],
+    "allow_extra_columns": true,
+    "required_types": {
+      "transaction_id": "string",
+      "date": "string",
+      "merchant": "string",
+      "amount": "string",
+      "category": "string"
+    }
+  },
+  "operations": [
+    {"type": "trim", "columns": ["merchant", "category"]},
+    {"type": "coerce_date", "column": "date", "input_formats": ["%m/%d/%Y", "%Y-%m-%d"], "output_format": "%Y-%m-%d", "on_error": "fail"},
+    {"type": "parse_decimal", "column": "amount", "decimal_separator": ".", "thousands_separator": ",", "decimal_places": 2, "on_error": "fail"},
+    {"type": "map_values", "column": "category", "mapping": {"food & drink": "Food", "Food": "Food", "meals": "Food", "transit": "Transport", "Transport": "Transport", "books": "Books", "Books": "Books"}, "on_unmapped": "fail"},
+    {"type": "dedupe", "key_columns": ["transaction_id"], "keep": "first"}
+  ],
+  "output_contract": {
+    "required_columns": ["transaction_id", "date", "merchant", "amount", "category"],
+    "preserve_extra_columns": true,
+    "preserve_source_file": true
+  },
+  "verification_policy": {
+    "require_golden_tests": true,
+    "require_regression_tests": true,
+    "require_idempotence_if_applicable": true
+  }
+}
