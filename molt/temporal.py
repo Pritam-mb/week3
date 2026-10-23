@@ -187,9 +187,13 @@ def execute_run_activity(
 if temporalio_available():  # Decorated definitions are absent when the SDK is absent.
 
     @_activity.defn(name="molt.execute-approved-run")
-    def molt_execute_activity(request: dict[str, Any]) -> dict[str, Any]:
+    async def molt_execute_activity(request: dict[str, Any]) -> dict[str, Any]:
         try:
-            return execute_run_activity(request)
+            # Molt's existing service is synchronous and performs file/SQLite
+            # work. Keep that work off Temporal's event loop while exposing an
+            # async activity, which the Python SDK requires when no custom
+            # activity executor is configured.
+            return await asyncio.to_thread(execute_run_activity, request)
         except MoltError as exc:
             if _ApplicationError is not None:
                 raise _ApplicationError(

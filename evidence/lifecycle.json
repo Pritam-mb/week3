@@ -1,0 +1,61 @@
+{
+  "live_approved_run": {
+    "approved_at": "2026-10-23T12:00:20Z",
+    "automation_id": "auto_1cb10942daf24e9a",
+    "created_at": "2026-10-23T12:00:19Z",
+    "created_from": "initial",
+    "id": "ver_84a618afeefc4245",
+    "model_name": "gemma3:4b",
+    "status": "ACTIVE",
+    "verification": {
+      "checks_failed": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "status": "PASS"
+    },
+    "version_number": 1
+  },
+  "drift_block": {
+    "run_id": "run_1958b4217b5e49e1",
+    "status": "BLOCKED_DRIFT",
+    "error_code": "REQUIRED_COLUMN_MISSING",
+    "rows_written": 0,
+    "quarantine_observed": true
+  },
+  "privacy": "Sanitized IDs, statuses, counts, model tag, and timing only. No recipes, prompts, responses, row values, paths, tokens, or credentials.",
+  "recorded_at": "2026-10-23T15:59:13.684757+00:00",
+  "rejected_repair": {
+    "status": "REJECTED",
+    "verification": {
+      "checks_failed": 2,
+      "checks_passed": 4,
+      "checks_total": 6,
+      "status": "FAIL"
+    }
+  },
+  "verified_repair": {
+    "base_version_id": "ver_cd4f302fd2c54d3a",
+    "candidate_version_id": "ver_ea0533f804dd4feb",
+    "id": "repair_95ba634ae7b54454",
+    "source_run_id": "run_1958b4217b5e49e1",
+    "status": "APPROVED",
+    "user_decision": "approved",
+    "verification": {
+      "checks_failed": 0,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "status": "PASS"
+    },
+    "verification_run_id": "verify_29515cdf306d4db0"
+  },
+  "zero_call_reuse_run": {
+    "baseline_llm_calls": 1,
+    "duration_ms": 157.45,
+    "error_code": null,
+    "id": "run_fc7906714f844750",
+    "llm_calls": 0,
+    "rows_read": 4,
+    "rows_written": 4,
+    "status": "SUCCEEDED"
+  }
+}

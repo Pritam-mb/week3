@@ -1,0 +1,97 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "failed_check_codes": [],
+      "failed_checks": 0,
+      "latency_ms": 165022.14,
+      "model": "gemma3:4b",
+      "model_calls": 4,
+      "outcome": "passed",
+      "pass_at_1": false,
+      "pass_within_5_verified_candidates": true,
+      "prompt_tokens": 1486,
+      "response_tokens": 246,
+      "verification": "PASS",
+      "verified_candidates": 4
+    },
+    {
+      "attempt": 2,
+      "failed_check_codes": [],
+      "failed_checks": 0,
+      "latency_ms": 28739.51,
+      "model": "gemma3:4b",
+      "model_calls": 1,
+      "outcome": "passed",
+      "pass_at_1": true,
+      "pass_within_5_verified_candidates": true,
+      "prompt_tokens": 1455,
+      "response_tokens": 246,
+      "verification": "PASS",
+      "verified_candidates": 1
+    },
+    {
+      "attempt": 3,
+      "failed_check_codes": [],
+      "failed_checks": 0,
+      "latency_ms": 39428.0,
+      "model": "gemma3:4b",
+      "model_calls": 1,
+      "outcome": "passed",
+      "pass_at_1": true,
+      "pass_within_5_verified_candidates": true,
+      "prompt_tokens": 1455,
+      "response_tokens": 249,
+      "verification": "PASS",
+      "verified_candidates": 1
+    },
+    {
+      "attempt": 4,
+      "failed_check_codes": [
+        "golden_output"
+      ],
+      "failed_checks": 1,
+      "latency_ms": 208166.89,
+      "model": "gemma3:4b",
+      "model_calls": 5,
+      "outcome": "rejected_or_exhausted",
+      "pass_at_1": false,
+      "pass_within_5_verified_candidates": false,
+      "prompt_tokens": 1486,
+      "response_tokens": 140,
+      "verification": "FAIL",
+      "verified_candidates": 5
+    },
+    {
+      "attempt": 5,
+      "failed_check_codes": [],
+      "failed_checks": 0,
+      "latency_ms": 42576.5,
+      "model": "gemma3:4b",
+      "model_calls": 1,
+      "outcome": "passed",
+      "pass_at_1": true,
+      "pass_within_5_verified_candidates": true,
+      "prompt_tokens": 1455,
+      "response_tokens": 243,
+      "verification": "PASS",
+      "verified_candidates": 1
+    }
+  ],
+  "configured_verified_candidates": 5,
+  "endpoint": "http://127.0.0.1:11434",
+  "model": "gemma3:4b",
+  "privacy": "No prompts, responses, CSV row values, credentials, or local secret configuration included.",
+  "recorded_at": "2026-10-23T15:44:12.700842+00:00",
+  "rung": 3,
+  "summary": {
+    "pass_at_1": 3,
+    "pass_within_5": 4,
+    "provider_errors": 0,
+    "rejected_or_exhausted": 1,
+    "runs": 5,
+    "total_model_calls": 12
+  },
+  "task": "trim_dates_decimals",
+  "task_description": "Trim surrounding whitespace from the merchant column, normalize the date column to YYYY-MM-DD, and parse the amount column to two decimal places. Preserve every other value, row, and column exactly."
+}

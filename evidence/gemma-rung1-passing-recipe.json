@@ -1,0 +1,35 @@
+{
+  "description": "Trim surrounding whitespace from the merchant column.",
+  "input_contract": {
+    "preserve_extra_columns": true,
+    "required_columns": [
+      "transaction_id",
+      "date",
+      "merchant",
+      "amount",
+      "category",
+      "notes"
+    ]
+  },
+  "name": "Trim Merchant",
+  "operations": [
+    {
+      "columns": [
+        "merchant"
+      ],
+      "type": "trim"
+    }
+  ],
+  "output_contract": {
+    "preserve_extra_columns": true,
+    "required_columns": [
+      "transaction_id",
+      "date",
+      "merchant",
+      "amount",
+      "category",
+      "notes"
+    ]
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,92 @@
+{
+  "claim_boundary": "Call avoidance is an inference proxy, not measured electricity savings. Cost is not estimated.",
+  "command": "python bench.py",
+  "molt_drift": {
+    "blocked_count": 2,
+    "cases": [
+      {
+        "error_code": "REQUIRED_COLUMN_MISSING",
+        "name": "renamed_customer_column",
+        "status": "BLOCKED_DRIFT"
+      },
+      {
+        "error_code": "REQUIRED_COLUMN_MISSING",
+        "name": "dropped_status_column",
+        "status": "BLOCKED_DRIFT"
+      },
+      {
+        "error_code": null,
+        "name": "reordered_columns",
+        "status": "SUCCEEDED"
+      },
+      {
+        "error_code": null,
+        "name": "extra_column",
+        "status": "SUCCEEDED"
+      }
+    ],
+    "quarantined_count": 2,
+    "seed": 41,
+    "status": "MEASURED",
+    "succeeded_count": 2
+  },
+  "naive_positional_script": {
+    "case_count": 4,
+    "cases": [
+      {
+        "accepted_drift": true,
+        "description": "Customer Name was renamed without an approved recipe change.",
+        "error": null,
+        "expected_molt_status": "BLOCKED_DRIFT",
+        "matches_independent_oracle": true,
+        "name": "renamed_customer_column",
+        "silent_wrong_output": false,
+        "status": "PRODUCED"
+      },
+      {
+        "accepted_drift": true,
+        "description": "The required status column was removed.",
+        "error": null,
+        "expected_molt_status": "BLOCKED_DRIFT",
+        "matches_independent_oracle": false,
+        "name": "dropped_status_column",
+        "silent_wrong_output": true,
+        "status": "PRODUCED"
+      },
+      {
+        "accepted_drift": false,
+        "description": "Required columns were reordered; names still identify them.",
+        "error": null,
+        "expected_molt_status": "SUCCEEDED",
+        "matches_independent_oracle": false,
+        "name": "reordered_columns",
+        "silent_wrong_output": true,
+        "status": "PRODUCED"
+      },
+      {
+        "accepted_drift": false,
+        "description": "An unrelated region column was added.",
+        "error": null,
+        "expected_molt_status": "SUCCEEDED",
+        "matches_independent_oracle": false,
+        "name": "extra_column",
+        "silent_wrong_output": true,
+        "status": "PRODUCED"
+      }
+    ],
+    "cost": {
+      "amount_usd": null,
+      "reason": "The benchmark has no defensible script-maintenance or provider price estimate; it reports behavior and measured latency only.",
+      "status": "not_estimated"
+    },
+    "drift_cases_accepted_without_validation": 2,
+    "implementation": "independently_authored_naive_positional_script",
+    "latency_ms": {
+      "mean": 0.009,
+      "samples": 4
+    },
+    "seed": 41,
+    "silent_wrong_outputs": 3
+  },
+  "recorded_at": "2026-10-23T15:59:13.458703+00:00"
+}

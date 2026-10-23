@@ -1,0 +1,47 @@
+{
+  "privacy": "Aggregate evidence only. No tokens, prompts, model responses, raw CSV rows, flagged row payloads, or Sentry DSNs recorded.",
+  "recorded_at": "2026-10-23T19:13:50.048656+00:00",
+  "tabpfn": {
+    "advisory_only": true,
+    "code": "TABPFN_ADVISORY_COMPLETE",
+    "credential_value_recorded": false,
+    "dataset": "synthetic_molt_drift_fixture",
+    "dataset_label": "synthetic, rule-generated labeled fixture",
+    "device": "cpu",
+    "features": [
+      "row_count",
+      "null_fraction",
+      "unseen_category_fraction",
+      "date_parse_fail_fraction",
+      "decimal_parse_fail_fraction",
+      "column_count_delta",
+      "duplicate_fraction",
+      "header_similarity"
+    ],
+    "held_out_rows": 300,
+    "limitation": "This is supervised holdout triage on synthetic labels, not unlabeled anomaly detection or real-world drift validation.",
+    "package_version": "9.1.0",
+    "rows_changed": 0,
+    "rows_flagged": 55,
+    "rows_scored": 300,
+    "source_preserved": true,
+    "status": "COMPLETE",
+    "target": "is_drift",
+    "train_rows": 1200
+  },
+  "temporal": {
+    "event_count": 11,
+    "llm_calls": 0,
+    "note": "This workflow used the approved checked-in fixture recipe; it proves the live Temporal durable boundary, not live Gemma generation.",
+    "result_status": "SUCCEEDED",
+    "retryable": false,
+    "rows_read": 4,
+    "rows_written": 3,
+    "server": "Temporal development server on 127.0.0.1:7233",
+    "status": "COMPLETED",
+    "temporal_outcome": "completed",
+    "worker_task_queue": "molt",
+    "workflow_id": "molt-live-20261024-001",
+    "workflow_run_id": "01a16a2d-61aa-7638-8e2c-c2341bfba208"
+  }
+}

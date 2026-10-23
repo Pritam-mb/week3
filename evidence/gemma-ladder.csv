@@ -1,0 +1,5 @@
+rung,task,model,runs,pass_at_1,pass_within_configured_retries,rejected_or_exhausted,provider_errors,total_model_calls,avg_latency_ms
+1,trim_merchant,gemma3:4b,5,5,5,0,0,5,18941.64
+2,trim_dates,gemma3:4b,5,4,5,0,0,6,30828.27
+3,trim_dates_decimals,gemma3:4b,5,3,4,1,0,12,96786.61
+4,full_expense,gemma3:4b,5,0,0,0,5,unknown,90596.51

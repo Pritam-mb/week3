@@ -1,0 +1,44 @@
+{
+  "recipe": {
+    "description": "Trims whitespace from merchant, normalizes date to YYYY-MM-DD, and parses amount to two decimal places.",
+    "input_contract": {
+      "required_columns": [
+        "transaction_id",
+        "date",
+        "merchant",
+        "amount",
+        "category",
+        "notes"
+      ]
+    },
+    "name": "Trim, Normalize Date, Parse Decimal",
+    "operations": [
+      {
+        "columns": [
+          "merchant"
+        ],
+        "type": "trim"
+      }
+    ],
+    "output_contract": {
+      "preserve_extra_columns": true,
+      "required_columns": [
+        "transaction_id",
+        "date",
+        "merchant",
+        "amount",
+        "category",
+        "notes"
+      ]
+    },
+    "schema_version": 1
+  },
+  "rung": 3,
+  "verification": {
+    "failed_check_codes": [
+      "golden_output"
+    ],
+    "failed_checks": 1,
+    "status": "FAIL"
+  }
+}

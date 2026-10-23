@@ -359,3 +359,50 @@ PASS — Ollama server/model ready, telemetry configured, TabPFN disabled
 Do not revisit `keep_known` unless a regression appears. Inspect the successful live automation and capture sanitized lifecycle evidence: approved recipe, verification result, zero-call run, and the earlier rejected Gemma candidate. Then run the planned 5–10 fixed-task attempts and record actual pass@1/pass@N results in a workspace report without prompts, secrets, raw CSV values, or local credentials. Keep TabPFN disabled unless its labeled task, licensing/access, and safe feature columns are explicitly confirmed.
 
 The first automated 5-attempt measurement was started with a 120-second model timeout but exceeded the command's 15-minute execution limit before writing its report; no pass-rate result should be inferred from that attempt. Re-run it with fewer attempts or a bounded per-attempt timeout and confirm the report file exists before using any numbers.
+
+## Refinement-plan update — 2026-10-23
+
+- Added the Tier A4 benchmark baseline in `bench.py` and `tests/test_bench.py`.
+  It uses seed 41, an independent positional script, four drift cases, silent-wrong output counts, and measured Molt block/quarantine counts.
+- Added `evidence/` with sanitized lifecycle, benchmark, Gemma ladder, rejected-candidate, and passing-recipe artifacts.
+- Prompt A2 refinement was applied: Gemma is explicitly told not to invent casing or other operations that were not requested.
+- Real task-ladder results are saved in `evidence/gemma-ladder.csv`:
+  - Rung 1 trim merchant: pass@1 5/5, within configured retries 5/5.
+  - Rung 2 trim plus dates: pass@1 4/5, within configured retries 5/5.
+  - Rung 3 trim plus dates plus decimals: pass@1 3/5, within configured retries 4/5; one exhausted rejection.
+  - Rung 4 full expense: 0/5; all five attempts timed out before a provider response envelope. Model-call count is intentionally unknown, not zero.
+- The post outline and Tier A status are now in `GAPS_AND_FIXES.md` section 8.
+
+## TabPFN and Temporal update — 2026-10-24
+
+- TabPFN live supervised advisory inference completed using the inherited local
+  token without printing or recording it. On the synthetic labeled fixture,
+  1,200 train rows and 300 held-out rows were used; 55 held-out rows were
+  flagged, `rows_changed=0`, and the source was preserved. Evidence:
+  `evidence/tabpfn-temporal-live.json`.
+- Installed the optional `temporalio` SDK from `.[temporal]`.
+- Downloaded the Temporal CLI into the approved temp directory, started a
+  local development server, started a Molt worker, and completed workflow
+  `molt-live-20261024-001`.
+- Temporal result: `SUCCEEDED`, `temporal_outcome=completed`, 11 history events,
+  0 model calls, 4 rows read, 3 rows written. This used the approved fixture
+  recipe and is evidence for the durable boundary, not live Gemma generation.
+- Fixed a real Temporal integration bug in `molt/temporal.py`: the decorated
+  activity was synchronous, which the current SDK rejects without a custom
+  executor. It is now an async activity that runs the existing synchronous
+  service in `asyncio.to_thread`.
+- The local worker/server are still running outside the workspace. Inspect
+  the process/listening port before reuse; do not claim a fresh workflow unless
+  it is actually queried.
+
+### Next concrete action after this refinement pass
+
+Run the new benchmark tests and full suite, inspect `evidence/benchmark.json` and `evidence/lifecycle.json` for privacy, then decide whether there is enough time for Tier B1 verifier-catch-rate measurement. Do not start dashboard polish or new integrations before the post draft exists.
+
+That action is now complete: benchmark tests and the full suite passed, the
+evidence JSON parsed cleanly, B1 measured 18/20 caught with two documented
+misses, and `POST_DRAFT.md` exists. Remaining work is post review/capture only:
+optionally implement B2 plain-language approval summary if there is a clear
+time budget, otherwise leave it deferred and use the existing dashboard. Do
+not add Tier C polish until the draft is reviewed and any screenshots are
+sanitized.

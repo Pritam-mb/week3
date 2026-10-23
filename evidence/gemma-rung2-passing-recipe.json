@@ -1,0 +1,45 @@
+{
+  "description": "Trim whitespace from merchant and normalize date to YYYY-MM-DD",
+  "input_contract": {
+    "preserve_extra_columns": true,
+    "required_columns": [
+      "transaction_id",
+      "date",
+      "merchant",
+      "amount",
+      "category",
+      "notes"
+    ]
+  },
+  "name": "Trim and Normalize Date",
+  "operations": [
+    {
+      "columns": [
+        "merchant"
+      ],
+      "type": "trim"
+    },
+    {
+      "column": "date",
+      "input_formats": [
+        "%m/%d/%Y",
+        "%Y-%m-%d"
+      ],
+      "on_error": "fail",
+      "output_format": "%Y-%m-%d",
+      "type": "coerce_date"
+    }
+  ],
+  "output_contract": {
+    "preserve_extra_columns": true,
+    "required_columns": [
+      "transaction_id",
+      "date",
+      "merchant",
+      "amount",
+      "category",
+      "notes"
+    ]
+  },
+  "schema_version": 1
+}
