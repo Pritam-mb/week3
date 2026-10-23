@@ -2,6 +2,31 @@
 
 ## Current status
 
+### Submission audit superseding earlier status below
+
+- `POST_DRAFT.md` now distinguishes scripted approval from independent human
+  review; fixture drift/repair and the live trim run are separate evidence.
+- Exact original mutation edits were recovered from the earlier inline session
+  command. `verifier_measurement.py` reproduces 18/20 on old fixtures and 20/20
+  after adding a distinguishing dedupe fixture and an expected-error oracle.
+  Five rejections are schema errors, not semantic fixture catches.
+- TabPFN real synthetic holdout: TP=52, FP=3, TN=225, FN=20; precision 94.55%,
+  recall 72.22%. Source preserved by hash. See `evidence/tabpfn-accuracy.json`.
+- Warm Gemma follow-up is complete: 0/5 passes, 15 requests, one timeout and 14
+  verification-rejected candidates; no activation. Original ladder is unchanged.
+  No staged compiler added. See `evidence/gemma-full-task-followup.json`.
+- Temporal wording: live fixture recipe, four-row input, zero model calls;
+  not Gemma generation or a demonstrated worker-crash recovery.
+- Read-only history scan: `.env` not tracked; no matches for current token/DSN.
+  Credential-shaped historical content in `workflow.txt` and an older
+  `.env.example` needs private review/revocation if real. `workflow.txt` still
+  contains a match. No history rewriting, publication, or credential rotation done.
+- Capture gaps: dashboard screenshot, Temporal UI (server is headless), Sentry
+  trace inspection and DSN rotation, external reader feedback, publishing preview.
+  Details: `evidence/CAPTURE_CHECKLIST.md`.
+
+### Earlier refinement status (historical)
+
 - Tier A1: complete for four measured rungs. Rungs 1–3 produced real passing
   and rejection data. Rung 4 had five bounded `GEMMA_TIMEOUT` results; no full
   expense pass-rate claim is made.

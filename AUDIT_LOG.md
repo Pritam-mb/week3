@@ -404,7 +404,11 @@ recipe.verify_examples
 recipe.verify_invariants
 ```
 
-This proves the local SDK initialization and redacted span path. Sentry dashboard receipt was not independently inspected, and the DSN must never be committed or copied into project documentation.
+This proves the local SDK initialization and local redacted-span path only. A later
+dashboard inspection found sensitive CSV values and local file paths in the live
+trace, so no Sentry screenshot or sanitized-dashboard claim is published. The
+DSN must never be committed or copied into project documentation; the exposed
+DSN was rotated after review.
 
 ### Configuration hardening
 

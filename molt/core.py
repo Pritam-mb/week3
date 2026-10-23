@@ -519,11 +519,40 @@ def write_csv_atomic(path: Path, headers: list[str], rows: list[dict[str, str]])
 
 
 def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> dict[str, Any]:
+    """Verify CSV oracles, or an expected error code in an *.error.json oracle.
+
+    Error expectations apply only to recipe execution, not fixture loading.
+    Positive fixtures alone supply inputs for the generic invariants below.
+    """
     recipe = validate_recipe(recipe)
     results: list[dict[str, Any]] = []
+    positive_fixtures = []
     for input_path, expected_path in fixtures:
         try:
             headers, rows = read_csv(input_path)
+            if expected_path.name.endswith(".error.json"):
+                expectation = load_json(expected_path)
+                _require(
+                    isinstance(expectation, dict) and set(expectation) == {"error_code"}
+                    and isinstance(expectation["error_code"], str) and bool(expectation["error_code"]),
+                    "INVALID_FIXTURE", "Expected-error fixture must declare a non-empty error_code.",
+                )
+                actual_error = None
+                try:
+                    execute_recipe(recipe, headers, rows)
+                except MoltError as exc:
+                    actual_error = exc.code
+                matches = actual_error == expectation["error_code"]
+                results.append({
+                    "fixture": input_path.name,
+                    "status": "PASS" if matches else "FAIL",
+                    "check": "expected_error",
+                    "expected_error": expectation["error_code"],
+                    "actual_error": actual_error,
+                    "details": "Execution rejected input with the expected error code." if matches else "Execution did not produce the expected error code.",
+                })
+                continue
+            positive_fixtures.append((input_path, expected_path))
             expected_headers, expected_rows = read_csv(expected_path)
             actual_headers, actual_rows = execute_recipe(recipe, headers, rows)
             matches = actual_headers == expected_headers and actual_rows == expected_rows
@@ -559,8 +588,8 @@ def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> 
                 })
         except MoltError as exc:
             results.append({"fixture": input_path.name, "status": "FAIL", "check": exc.code, "details": exc.message, "context": {key: value for key, value in exc.details.items() if key != "value"}})
-    if fixtures:
-        input_path, _ = fixtures[0]
+    if positive_fixtures:
+        input_path, _ = positive_fixtures[0]
         try:
             headers, rows = read_csv(input_path)
             execute_recipe(recipe, headers, [])

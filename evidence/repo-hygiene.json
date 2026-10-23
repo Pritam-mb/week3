@@ -1,0 +1,41 @@
+{
+  "recorded_at": "2026-10-23T19:44:57.319659+00:00",
+  "revision": "381dd615afabb1cf591b0be38c235e71868ae9a6",
+  "scope": "All blobs reachable from local Git refs (--all); no remote fetch or history rewrite.",
+  "reachable_blobs_scanned": 98,
+  "private_env_paths_in_history": [],
+  "env_tracked_now": false,
+  "env_ignored_now": true,
+  "known_credential_values_available_for_scan": {
+    "TABPFN_TOKEN": true,
+    "SENTRY_DSN": true
+  },
+  "known_credential_matching_blob_counts": {
+    "TABPFN_TOKEN": 0,
+    "SENTRY_DSN": 0
+  },
+  "credential_signature_matching_blob_count": 2,
+  "credential_signature_paths_for_private_review": [
+    ".env.example",
+    "workflow.txt"
+  ],
+  "signature_review_without_values": [
+    {
+      "path": "workflow.txt",
+      "kind": "token_pattern",
+      "repeated_character_example_key": false,
+      "matches_current_known_value": false
+    },
+    {
+      "path": ".env.example",
+      "kind": "sentry_dsn",
+      "repeated_character_example_key": false,
+      "matches_current_known_value": false
+    }
+  ],
+  "signature_paths_still_in_working_tree": [
+    "workflow.txt"
+  ],
+  "limitations": "No proof that arbitrary old/rotated or unrecognized secrets never existed. Reflog-only, unreachable, remote-only objects and chat/screenshots are outside scope. Pattern matches need private review.",
+  "sentry_rotation": "NOT_DONE; dashboard account access required; historical chat exposure still requires rotation."
+}

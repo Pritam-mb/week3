@@ -266,10 +266,14 @@ class AnomalyAnalyzer:
 
         threshold = 0.5
         flagged: list[dict[str, Any]] = []
+        confusion = {"true_positives": 0, "false_positives": 0, "true_negatives": 0, "false_negatives": 0}
         redact_target = is_sensitive_field(label_column)
         for position, row_index in enumerate(test_indices):
             score = float(probabilities[position][anomaly_index])
-            if score >= threshold:
+            predicted_positive = score >= threshold
+            observed_positive = labels[row_index] == anomaly_label
+            if predicted_positive:
+                confusion["true_positives" if observed_positive else "false_positives"] += 1
                 flagged.append({
                     "row_number": row_index + 2,
                     "score": round(score, 6),
@@ -277,6 +281,10 @@ class AnomalyAnalyzer:
                     "observed_label": "<REDACTED_COLUMN>" if redact_target else labels[row_index],
                     "row_redacted": redact_sample(rows[row_index]),
                 })
+            else:
+                confusion["false_negatives" if observed_positive else "true_negatives"] += 1
+        tp, fp = confusion["true_positives"], confusion["false_positives"]
+        tn, fn = confusion["true_negatives"], confusion["false_negatives"]
         safe_anomaly_label = "<REDACTED_COLUMN>" if redact_target else anomaly_label
         result.update({
             "status": "COMPLETE",
@@ -290,8 +298,17 @@ class AnomalyAnalyzer:
             "rows_scored": len(test_indices),
             "rows_flagged": len(flagged),
             "flagged_rows": flagged,
+            "holdout_metrics": {
+                "reference": "supplied held-out labels",
+                "confusion_matrix": confusion,
+                "precision": tp / (tp + fp) if tp + fp else 0.0,
+                "recall": tp / (tp + fn) if tp + fn else 0.0,
+                "false_positive_rate": fp / (fp + tn) if fp + tn else 0.0,
+                "accuracy": (tp + tn) / len(test_indices) if test_indices else 0.0,
+                "zero_division": 0.0,
+            },
             "limitations": [
-                "Only held-out rows receive scores; this is triage, not a model accuracy estimate.",
+                "Metrics evaluate only the deterministic holdout against supplied labels; they do not establish real-world anomaly detection quality.",
                 "The supplied target is the reference label; unusual does not mean invalid.",
                 "The core Molt workflow does not consume these flags.",
             ],

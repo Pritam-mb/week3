@@ -1,0 +1,523 @@
+{
+  "recorded_at": "2026-10-23T19:50:08.992476+00:00",
+  "model": "gemma3:4b",
+  "temperature": 0,
+  "keep_alive": "15m",
+  "request_timeout_seconds": 120,
+  "max_requests_per_trial": 3,
+  "trial_deadline_seconds": 390,
+  "system_prompt_sha256": "aac124d0a9e29643489cd3afd6ed6c07ed0617644303a94f620968e19a435c9e",
+  "task_sha256": "4c6315e37e650c741ff6b667fac0b63e61afd5639382375b79034bd92bd9d691",
+  "original_evidence": "evidence/gemma-ladder-rung4.json",
+  "changes": "Shorter system prompt and structural golden context; 120s timeout; warm model; expanded verifier fixtures. Not directly comparable to original 30s/3-request rung4.",
+  "fixture_independence": "Expected outputs and held-out rows never sent. Structured verification feedback can include held-out failures, so these fixtures are regression/development tests, not an untouched final evaluation set.",
+  "activation": "Measurement never approves or executes candidates.",
+  "trials": [
+    {
+      "trial": 1,
+      "status": "REJECTED",
+      "requests": [
+        {
+          "number": 1,
+          "status": "ERROR",
+          "error_code": "GEMMA_TIMEOUT",
+          "latency_seconds": 120.015
+        },
+        {
+          "number": 2,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 543,
+          "response_tokens": 386,
+          "latency_seconds": 79.712
+        },
+        {
+          "number": 3,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1175,
+          "response_tokens": 310,
+          "latency_seconds": 69.842
+        }
+      ],
+      "automation_id": "auto_a9e07a60232547ad",
+      "verification": "FAIL",
+      "pass_at_1": false,
+      "pass_within_3": false,
+      "candidates": [
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        }
+      ],
+      "active_version_present": false,
+      "latency_seconds": 270.471,
+      "generation_requests_attempted": 3,
+      "verified_candidates": 2
+    },
+    {
+      "trial": 2,
+      "status": "REJECTED",
+      "requests": [
+        {
+          "number": 1,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 512,
+          "response_tokens": 464,
+          "latency_seconds": 77.541
+        },
+        {
+          "number": 2,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 447,
+          "latency_seconds": 83.519
+        },
+        {
+          "number": 3,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1236,
+          "response_tokens": 447,
+          "latency_seconds": 95.07
+        }
+      ],
+      "automation_id": "auto_5c8ab3736c344619",
+      "verification": "FAIL",
+      "pass_at_1": false,
+      "pass_within_3": false,
+      "candidates": [
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        }
+      ],
+      "active_version_present": false,
+      "latency_seconds": 257.058,
+      "generation_requests_attempted": 3,
+      "verified_candidates": 3
+    },
+    {
+      "trial": 3,
+      "status": "RECOVERED_NO_PASS",
+      "requests": [
+        {
+          "number": 1,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 512,
+          "response_tokens": 464,
+          "latency_seconds": 79.708
+        },
+        {
+          "number": 2,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 425,
+          "latency_seconds": 75.637
+        },
+        {
+          "number": 3,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 425,
+          "latency_seconds": 75.931
+        }
+      ],
+      "automation_id": "auto_6c7ac84f72a44382",
+      "verification": "FAIL",
+      "pass_at_1": false,
+      "pass_within_3": false,
+      "generation_requests_attempted": 3,
+      "verified_candidates": 3,
+      "active_version_present": false,
+      "latency_seconds": null,
+      "recovery_note": "Final JSON replace failed on Windows. Outcomes recovered from existing SQLite verification records; no model calls repeated. Total latency unavailable.",
+      "candidates": [
+        {
+          "status": "REJECTED",
+          "checks_failed": 6,
+          "failed_check_codes": [
+            "INPUT_TYPE_MISMATCH",
+            "column_order_invariant",
+            "expected_error",
+            "extra_column_preservation"
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_failed": 6,
+          "failed_check_codes": [
+            "INPUT_TYPE_MISMATCH",
+            "column_order_invariant",
+            "expected_error",
+            "extra_column_preservation"
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_failed": 6,
+          "failed_check_codes": [
+            "INPUT_TYPE_MISMATCH",
+            "column_order_invariant",
+            "expected_error",
+            "extra_column_preservation"
+          ]
+        }
+      ]
+    },
+    {
+      "trial": 4,
+      "status": "RECOVERED_NO_PASS",
+      "requests": [
+        {
+          "number": 1,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 512,
+          "response_tokens": 464,
+          "latency_seconds": 104.789
+        },
+        {
+          "number": 2,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 425,
+          "latency_seconds": 87.576
+        },
+        {
+          "number": 3,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 425,
+          "latency_seconds": 83.338
+        }
+      ],
+      "automation_id": "auto_431e30983782444b",
+      "verification": "FAIL",
+      "pass_at_1": false,
+      "pass_within_3": false,
+      "generation_requests_attempted": 3,
+      "verified_candidates": 3,
+      "active_version_present": false,
+      "latency_seconds": null,
+      "recovery_note": "Final JSON replace failed on Windows. Outcomes recovered from existing SQLite verification records; no model calls repeated. Total latency unavailable.",
+      "candidates": [
+        {
+          "status": "REJECTED",
+          "checks_failed": 6,
+          "failed_check_codes": [
+            "INPUT_TYPE_MISMATCH",
+            "column_order_invariant",
+            "expected_error",
+            "extra_column_preservation"
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_failed": 6,
+          "failed_check_codes": [
+            "INPUT_TYPE_MISMATCH",
+            "column_order_invariant",
+            "expected_error",
+            "extra_column_preservation"
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_failed": 6,
+          "failed_check_codes": [
+            "INPUT_TYPE_MISMATCH",
+            "column_order_invariant",
+            "expected_error",
+            "extra_column_preservation"
+          ]
+        }
+      ]
+    },
+    {
+      "trial": 5,
+      "status": "REJECTED",
+      "requests": [
+        {
+          "number": 1,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 512,
+          "response_tokens": 464,
+          "latency_seconds": 90.941
+        },
+        {
+          "number": 2,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 425,
+          "latency_seconds": 85.751
+        },
+        {
+          "number": 3,
+          "status": "SCHEMA_VALID",
+          "prompt_tokens": 1214,
+          "response_tokens": 425,
+          "latency_seconds": 91.673
+        }
+      ],
+      "automation_id": "auto_be8954075cf14dc6",
+      "verification": "FAIL",
+      "pass_at_1": false,
+      "pass_within_3": false,
+      "candidates": [
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        },
+        {
+          "status": "REJECTED",
+          "checks_total": 8,
+          "checks_failed": 6,
+          "failed_checks": [
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "INPUT_TYPE_MISMATCH",
+              "structure": {}
+            },
+            {
+              "check": "expected_error",
+              "structure": {}
+            },
+            {
+              "check": "column_order_invariant",
+              "structure": {}
+            },
+            {
+              "check": "extra_column_preservation",
+              "structure": {}
+            }
+          ]
+        }
+      ],
+      "active_version_present": false,
+      "latency_seconds": 270.621,
+      "generation_requests_attempted": 3,
+      "verified_candidates": 3
+    }
+  ],
+  "warmup": {
+    "status": "COMPLETE",
+    "done": true,
+    "model": "gemma3:4b",
+    "seconds": 13.686
+  },
+  "summary": {
+    "trials": 5,
+    "pass_at_1": 0,
+    "pass_within_3": 0,
+    "generation_requests_attempted": 15
+  }
+}

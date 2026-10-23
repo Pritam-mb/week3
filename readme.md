@@ -2,6 +2,14 @@
 
 **Compile once. Verify against truth. Reuse without repeated inference.**
 
+```text
+python -m molt demo --offline --approve
+```
+
+Python 3.11+; no Ollama, credentials, or network required for this fixture demo.
+`--approve` is explicit scripted demo approval, not evidence of independent
+human review. Put a fresh `--state-dir` before `demo` to isolate its artifacts.
+
 Molt is the Week 3 Hacktoberfest Open-Source AI Challenge project. It makes repetitive CSV cleanup lazy in a safer way: a local open-weight model can propose a constrained recipe, but a deterministic runtime executes it only after independent verification and human approval.
 
 ## Try the demo
@@ -9,12 +17,12 @@ Molt is the Week 3 Hacktoberfest Open-Source AI Challenge project. It makes repe
 From this directory:
 
 ```text
-python -m unittest discover -s tests -v
-python bench.py
 python -m molt demo --offline --approve
 ```
 
 The demo shows compile, verification, approval, two deterministic reuse runs with zero additional model calls, and two drift cases that are blocked and copied to the selected workspace quarantine directory.
+
+Developer checks: `python -m unittest discover -s tests -v` and `python bench.py`.
 
 Repair candidates are deliberately separate from the active recipe:
 
@@ -70,6 +78,12 @@ TabPFN is deliberately optional and is not part of the compile/verify/reuse path
 ```text
 python -m pip install -e ".[anomaly]"
 ```
+
+**License:** TabPFN code and model weights have separate licenses. Prior Labs
+publishes the 2.5, 2.6, 3 and 3.5 weights under **non-commercial licenses**;
+commercial use requires appropriate separate permission. Earlier v2 weights
+have different terms. See the [official license overview](https://github.com/PriorLabs/TabPFN#license)
+and the selected checkpoint's license. Molt's config flag does not grant rights.
 
 Enable it in `.env` only after reviewing the selected TabPFN model-weight terms:
 

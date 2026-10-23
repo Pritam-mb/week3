@@ -49,6 +49,7 @@ class OllamaTests(unittest.TestCase):
         self.assertIsInstance(payload["format"], dict)
         self.assertIn("schema_version", payload["format"]["properties"])
         self.assertIn("system", payload)
+        self.assertEqual(payload["keep_alive"], "15m")
         self.assertNotIn("PRIVATE_VALUE", payload["prompt"])
         self.assertEqual(captured["timeout"], 3)
 

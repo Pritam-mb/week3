@@ -306,7 +306,12 @@ class MoltService:
         recipe = recipe or (automation.get("candidate") or automation.get("active_version") or {}).get("recipe", {})
         columns = set(profile.get("columns", [])) if profile else set()
         is_orders = {"order_id", " Customer Name ", "status", "order_date"} <= columns or str(recipe.get("name", "")).startswith("normalize_weekly_orders")
-        defaults = [(root / "orders_input.csv", root / "orders_expected.csv")] if is_orders else [(root / "input" / "golden.csv", root / "expected" / "golden.csv"), (root / "input" / "heldout.csv", root / "expected" / "heldout.csv")]
+        defaults = [(root / "orders_input.csv", root / "orders_expected.csv")] if is_orders else [
+            (root / "input" / "golden.csv", root / "expected" / "golden.csv"),
+            (root / "input" / "heldout.csv", root / "expected" / "heldout.csv"),
+            (root / "input" / "dedupe-key.csv", root / "expected" / "dedupe-key.csv"),
+            (root / "input" / "drift-unmapped-category.csv", root / "expected" / "drift-unmapped-category.error.json"),
+        ]
         with closing(self.db.connect()) as connection:
             stored = connection.execute("SELECT input_artifact_id, expected_artifact_id FROM test_fixtures WHERE automation_id = ? AND expected_artifact_id IS NOT NULL ORDER BY created_at", (automation_id,)).fetchall()
             paths = []

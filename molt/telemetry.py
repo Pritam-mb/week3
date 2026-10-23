@@ -25,7 +25,7 @@ _SENSITIVE_KEY_PARTS = (
     "content", "csv", "file", "path", "prompt", "response", "row", "secret", "token", "value",
 )
 _SAFE_SCRUB_STRING_KEYS = {
-    "description", "environment", "event_id", "op", "release", "span_id", "status", "trace_id", "transaction", "type",
+    "description", "environment", "event_id", "op", "release", "span_id", "parent_span_id", "origin", "status", "trace_id", "transaction", "type",
 }
 
 
@@ -58,6 +58,7 @@ class Telemetry:
                     self.dsn,
                     send_default_pii=False,
                     traces_sample_rate=1.0,
+                    default_integrations=False,
                     before_send=self._before_send,
                     before_send_transaction=self._before_send_transaction,
                 )
@@ -188,7 +189,17 @@ class Telemetry:
             if not isinstance(key, str):
                 continue
             lowered = key.lower()
-            if lowered in {"message", "request", "breadcrumbs", "exception", "stacktrace", "contexts", "extra"}:
+            if lowered in {"message", "request", "breadcrumbs", "exception", "stacktrace", "extra"}:
+                continue
+            if lowered == "contexts":
+                trace_ctx = value.get("trace") if isinstance(value, dict) else None
+                if isinstance(trace_ctx, dict):
+                    scrubbed["contexts"] = {
+                        "trace": {
+                            k: v for k, v in trace_ctx.items()
+                            if k in {"trace_id", "span_id", "parent_span_id", "op", "status", "type", "origin", "dynamic_sampling_context"}
+                        }
+                    }
                 continue
             if lowered not in _SAFE_ATTRIBUTE_KEYS and (
                 any(part in lowered for part in _SENSITIVE_KEY_PARTS)
@@ -206,8 +217,9 @@ class Telemetry:
                     scrubbed[key] = nested_list
             elif isinstance(value, (bool, int, float)):
                 scrubbed[key] = value
-            elif key.lower() in _SAFE_SCRUB_STRING_KEYS and isinstance(value, str) and _SAFE_LABEL.fullmatch(value) and not cls._contains_sensitive_token(value):
-                scrubbed[key] = value
+            elif key.lower() in _SAFE_SCRUB_STRING_KEYS and isinstance(value, str):
+                if _SAFE_NAME.fullmatch(value) or (_SAFE_LABEL.fullmatch(value) and not cls._contains_sensitive_token(value)):
+                    scrubbed[key] = value
         return scrubbed
 
     @classmethod

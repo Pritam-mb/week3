@@ -406,3 +406,38 @@ optionally implement B2 plain-language approval summary if there is a clear
 time budget, otherwise leave it deferred and use the existing dashboard. Do
 not add Tier C polish until the draft is reviewed and any screenshots are
 sanitized.
+
+## Submission pass — 2026-10-24 (latest, supersedes earlier next steps)
+
+Stop new features. `POST_DRAFT.md` has been audited and now distinguishes live
+Gemma evidence, scripted approval, and separate fixture drift/repair records.
+The pipeline illustration is available as `evidence/pipeline.svg` and the
+visually inspected browser-rendered `evidence/pipeline.png`.
+
+- Verifier fixes: new dedupe-key fixture and expected-error unknown-category
+  oracle wired into the expense default verification path. Original 20 mutations
+  recovered exactly from the inline session command. Original fixtures reproduce
+  18/20; expanded fixtures reject 20/20, including five schema errors. Correct
+  recipe passes 11/11. `python verifier_measurement.py --check` reproduces it.
+- TabPFN: real synthetic holdout confusion TP52/FP3/TN225/FN20; precision94.55%,
+  recall72.22%; source hash preserved. `evidence/tabpfn-accuracy.json`.
+- Full-task final bounded attempt: warm Gemma, shorter prompt,120s request timeout,
+  five trials with three requests each. 0/5 successes, one request timeout,
+  14 schema-valid candidates rejected. No activation. Original ladder unchanged.
+  Two report writes failed on Windows; outcomes recovered from existing SQLite
+  records without rerunning calls; total latencies left unavailable. No staged
+  compilation added. `evidence/gemma-full-task-followup.json`.
+- Full suite: 66 tests passed; compileall, JS syntax, benchmark, mutation rerun
+  and diff whitespace checks passed. Offline demo passed in a fresh temporary
+  workspace without credentials/.env and with socket connections forbidden.
+- Hygiene: `.env` ignored/not tracked; no current token/DSN value found in all
+  reachable Git blobs. Historical credential-shaped strings found in workflow.txt
+  and older .env.example; workflow.txt still contains a match. DO NOT publish
+  until privately reviewed/revoked if real. Do not paste strings into chat.
+- No Sentry dashboard access/rotation performed. No Temporal UI screenshot
+  (headless server). No publication or independent human post review.
+
+Next action: address the credential warning and manual account/capture checklist
+in `evidence/CAPTURE_CHECKLIST.md`, then review/upload `POST_DRAFT.md` and its
+PNG in the publishing preview. Every numeric claim maps to
+`evidence/POST_AUDIT.md`. Do not repeat the full-task experiment or expand scope.

@@ -1,0 +1,29 @@
+{
+  "recorded_at": "2026-10-23T21:53:58.581882+00:00",
+  "offline_demo": {
+    "status": "PASS",
+    "env_file": "absent",
+    "credentials_removed_from_child_environment": true,
+    "network_connects": "forbidden",
+    "exit_code": 0,
+    "runs": {
+      "golden-reuse": "SUCCEEDED",
+      "heldout-reuse": "SUCCEEDED",
+      "missing-column": "BLOCKED_DRIFT",
+      "unmapped-category": "BLOCKED_DRIFT"
+    },
+    "scope": "Fresh temporary workspace, existing local Python installation; not a fresh OS installation."
+  },
+  "local_markdown_links": {
+    "checked": 13,
+    "missing": []
+  },
+  "pipeline_svg": "XML parsed",
+  "evidence_json_files_parsed": 18,
+  "tags_present": true,
+  "not_checked": [
+    "external links on publication site",
+    "image upload/render in publishing preview",
+    "human read-aloud/external review"
+  ]
+}

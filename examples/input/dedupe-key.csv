@@ -1,0 +1,4 @@
+transaction_id,date,merchant,amount,category,notes
+t-201,10/12/2026, Corner Cafe ,8.5,meals,first purchase
+t-202,10/13/2026,Corner Cafe,14.00,food & drink,separate purchase at same merchant
+t-201,10/12/2026,Corner Cafe,99.00,meals,later duplicate must not replace first
