@@ -28,7 +28,7 @@ _OPERATION_SCHEMAS = [
     _operation_variant("normalize_case", ["columns", "mode"], {"columns": _STRING_ARRAY, "mode": {"enum": ["lower", "upper", "title"]}}),
     _operation_variant("coerce_date", ["column", "input_formats", "output_format", "on_error"], {"column": {"type": "string"}, "input_formats": _STRING_ARRAY, "output_format": {"type": "string"}, "on_error": _FAIL}),
     _operation_variant("parse_decimal", ["column", "decimal_separator", "thousands_separator", "decimal_places", "on_error"], {"column": {"type": "string"}, "decimal_separator": {"enum": [".", ","]}, "thousands_separator": {"type": "string"}, "decimal_places": {"type": "integer", "minimum": 0, "maximum": 6}, "on_error": _FAIL}),
-    _operation_variant("map_values", ["column", "mapping", "on_unmapped"], {"column": {"type": "string"}, "mapping": {"type": "object", "additionalProperties": {"type": "string"}}, "on_unmapped": {"enum": ["fail", "preserve"]}}),
+    _operation_variant("map_values", ["column", "mapping", "on_unmapped"], {"column": {"type": "string"}, "mapping": {"type": "object", "additionalProperties": {"type": "string"}}, "on_unmapped": {"enum": ["fail", "preserve"]}, "keep_known": {"type": "boolean"}}),
     _operation_variant("split_column", ["column", "delimiter", "output_columns", "on_missing"], {"column": {"type": "string"}, "delimiter": {"type": "string"}, "output_columns": _STRING_ARRAY, "on_missing": {"enum": ["fail", "fill_empty"]}}),
     _operation_variant("dedupe", ["key_columns", "keep"], {"key_columns": _STRING_ARRAY, "keep": {"enum": ["first", "last"]}}),
     _operation_variant("filter_rows", ["condition", "on_no_match"], {"condition": {"type": "object"}, "on_no_match": {"enum": ["keep_empty", "fail"]}}),
@@ -92,7 +92,7 @@ For trim and normalize_case use columns (an array). For coerce_date and parse_de
 column (a single column), plus input_formats/output_format or decimal_separator,
 output_format, and on_error:"fail". For parse_decimal use decimal_separator,
 thousands_separator, decimal_places, and on_error:"fail". decimal_places is required.
-For map_values use mapping and on_unmapped.
+For map_values use mapping, on_unmapped, and keep_known:true unless the user explicitly requests that canonical values be rejected.
 Canonical operation shapes include:
 {"type":"trim","columns":["merchant"]}
 {"type":"coerce_date","column":"date","input_formats":["%m/%d/%Y","%Y-%m-%d"],"output_format":"%Y-%m-%d","on_error":"fail"}
@@ -214,7 +214,7 @@ def generate_recipe(
         candidate = json.loads(raw_recipe)
     except json.JSONDecodeError as exc:
         raise MoltError("MODEL_RESPONSE_INVALID", "Ollama recipe content was not valid JSON.") from exc
-    validate_recipe(candidate)
+    candidate = validate_recipe(candidate)
     return candidate, {
         "provider": "ollama",
         "model": response_data.get("model", model),
@@ -227,5 +227,4 @@ def generate_recipe(
 
 def load_fixture_recipe(path: Path) -> dict[str, Any]:
     recipe = load_json(path)
-    validate_recipe(recipe)
-    return recipe
+    return validate_recipe(recipe)

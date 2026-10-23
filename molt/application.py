@@ -153,7 +153,7 @@ class MoltService:
         operation_count = len(recipe.get("operations", [])) if isinstance(recipe, dict) and isinstance(recipe.get("operations"), list) else 0
         with self.telemetry.span("recipe.validate_operations", operation_count=operation_count):
             with self.telemetry.span("recipe.validate_schema", operation_count=operation_count):
-                validate_recipe(recipe)
+                recipe = validate_recipe(recipe)
         automation = self.get_automation(automation_id)
         version_id = new_id("ver")
         version_number = max((version["version_number"] for version in automation["versions"]), default=0) + 1

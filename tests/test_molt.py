@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from molt.core import MoltError, execute_recipe, execute_recipe_resumable, load_json, read_csv, validate_recipe, verify_recipe
+from molt.privacy import safe_verification_feedback
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,45 @@ class MoltCoreTests(unittest.TestCase):
         with self.assertRaises(MoltError) as context:
             execute_recipe(RECIPE, headers, rows)
         self.assertEqual(context.exception.code, "UNMAPPED_VALUE")
+        self.assertEqual(context.exception.details["column"], "category")
+        self.assertEqual(context.exception.details["unmapped_count"], 1)
+
+    def test_map_values_keeps_canonical_values_without_identity_entries(self) -> None:
+        recipe = json.loads(json.dumps(RECIPE))
+        mapping = recipe["operations"][3]["mapping"]
+        for canonical in ("Food", "Transport", "Books"):
+            mapping.pop(canonical)
+        normalized = validate_recipe(recipe)
+        self.assertTrue(normalized["operations"][3]["keep_known"])
+        headers, rows = read_csv(ROOT / "examples/input/golden.csv")
+        actual_headers, actual_rows = execute_recipe(recipe, headers, rows)
+        expected_headers, expected_rows = read_csv(ROOT / "examples/expected/golden.csv")
+        self.assertEqual(actual_headers, expected_headers)
+        self.assertEqual(actual_rows, expected_rows)
+
+    def test_map_values_can_reject_canonical_values_when_requested(self) -> None:
+        recipe = json.loads(json.dumps(RECIPE))
+        recipe["operations"][3]["keep_known"] = False
+        recipe["operations"][3]["mapping"] = {"food & drink": "Food"}
+        headers, rows = read_csv(ROOT / "examples/input/golden.csv")
+        with self.assertRaises(MoltError) as context:
+            execute_recipe(recipe, headers, rows)
+        self.assertEqual(context.exception.code, "UNMAPPED_VALUE")
+
+    def test_safe_unmapped_feedback_contains_structure_not_values(self) -> None:
+        feedback = safe_verification_feedback({
+            "status": "FAIL",
+            "checks_failed": 1,
+            "results": [{
+                "status": "FAIL",
+                "check": "UNMAPPED_VALUE",
+                "context": {"column": "category", "unmapped_count": 3, "value": "private merchant"},
+            }],
+        })
+        encoded = json.dumps(feedback)
+        self.assertIn("3 row(s)", feedback["failures"][0]["message"])
+        self.assertNotIn("private merchant", encoded)
+        self.assertNotIn("value", feedback["failures"][0]["context"])
 
     def test_unknown_operation_is_rejected(self) -> None:
         invalid = json.loads(json.dumps(RECIPE))

@@ -90,7 +90,10 @@ def safe_verification_feedback(
             }
         context = item.get("context")
         if check == "UNMAPPED_VALUE" and isinstance(context, dict) and isinstance(context.get("column"), str):
-            failure["context"] = {"column": context["column"][:80]}
+            column = context["column"][:80]
+            count = int(context.get("unmapped_count", 0) or 0)
+            failure["message"] = f"Unmapped value in column {column}, {count} row(s); preserve canonical values and apply the declared unmapped policy."
+            failure["context"] = {"column": column, "unmapped_rows": count}
         failures.append(failure)
         if len(failures) >= max_failures:
             break

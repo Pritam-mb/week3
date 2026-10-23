@@ -249,6 +249,26 @@ class CompileFeedbackTests(unittest.TestCase):
             self.assertEqual(automation_reread["candidate"]["id"], returned["id"])
             self.assertIsNone(automation_reread["active_version"])
 
+    def test_model_style_recipe_is_normalized_before_verification_and_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            service = self.service(directory, retries=0)
+            source = self.expense_input(service)
+            automation = service.create_automation("Expenses", "Normalize expense exports")
+            recipe = copy.deepcopy(EXPENSE_RECIPE)
+            mapping = recipe["operations"][3]["mapping"]
+            for canonical in ("Food", "Transport", "Books"):
+                mapping.pop(canonical)
+            with patch("molt.application.generate_recipe", return_value=(recipe, {
+                "provider": "ollama", "model": "mock-model", "llm_calls": 1,
+                "prompt_tokens": 4, "response_tokens": 2,
+            })):
+                version = service.generate_candidate(automation["id"], "Normalize expenses", service.profile(source), model="mock-model")
+
+            self.assertEqual(version["status"], "AWAITING_APPROVAL")
+            stored = service.get_version(version["id"])
+            self.assertTrue(stored["recipe"]["operations"][3]["keep_known"])
+            self.assertEqual(stored["verification"]["status"], "PASS")
+
     def test_profile_family_pins_legacy_fixtures_before_model_recipe_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             service = self.service(directory, retries=1)

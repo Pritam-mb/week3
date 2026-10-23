@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import copy
 import hashlib
 import json
 import os
@@ -54,7 +55,7 @@ OPERATION_FIELDS = {
         "decimal_places",
         "on_error",
     },
-    "map_values": {"type", "column", "mapping", "on_unmapped"},
+    "map_values": {"type", "column", "mapping", "on_unmapped", "keep_known"},
     "split_column": {"type", "column", "delimiter", "output_columns", "on_missing"},
     "dedupe": {"type", "key_columns", "keep"},
     "filter_rows": {"type", "condition", "on_no_match"},
@@ -83,8 +84,19 @@ def save_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def normalize_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
+    """Fill backward-compatible defaults before a recipe is verified or stored."""
+    normalized = copy.deepcopy(recipe)
+    if isinstance(normalized, dict) and isinstance(normalized.get("operations"), list):
+        for operation in normalized["operations"]:
+            if isinstance(operation, dict) and operation.get("type") == "map_values":
+                operation.setdefault("keep_known", True)
+    return normalized
+
+
 def validate_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     """Validate the closed recipe language before any input is touched."""
+    recipe = normalize_recipe(recipe)
     _require(isinstance(recipe, dict), "RECIPE_SCHEMA_INVALID", "Recipe must be a JSON object.")
     required = {"schema_version", "name", "description", "input_contract", "operations", "output_contract"}
     _require(not (set(recipe) - required - {"verification_policy", "limits"}), "RECIPE_SCHEMA_INVALID", "Recipe contains unsupported top-level fields.")
@@ -156,6 +168,7 @@ def _validate_operation(operation: dict[str, Any], required_columns: list[str]) 
         _require(isinstance(operation.get("mapping"), dict), "RECIPE_SCHEMA_INVALID", "map_values.mapping is required.")
         _require(all(isinstance(key, str) and isinstance(value, str) for key, value in operation["mapping"].items()), "RECIPE_SCHEMA_INVALID", "map_values.mapping must map strings to strings.")
         _require(operation.get("on_unmapped") in {"fail", "preserve"}, "RECIPE_SCHEMA_INVALID", "on_unmapped must be fail or preserve.")
+        _require(isinstance(operation.get("keep_known"), bool), "RECIPE_SCHEMA_INVALID", "map_values.keep_known must be a boolean.")
     elif op_type == "dedupe":
         _require(isinstance(operation.get("key_columns"), list) and operation["key_columns"], "RECIPE_SCHEMA_INVALID", "dedupe.key_columns is required.")
         _require(set(operation["key_columns"]) <= set(required_columns), "RECIPE_SCHEMA_INVALID", "dedupe references an undeclared column.")
@@ -324,12 +337,24 @@ def _apply_operation(operation: dict[str, Any], working_headers: list[str], work
                 row[operation["column"]] = _parse_decimal(row.get(operation["column"], ""), operation)
         elif op_type == "map_values":
             mapping = operation["mapping"]
+            column = operation["column"]
+            known_values = set(mapping.values())
+            keep_known = operation.get("keep_known", True)
+            unmapped_count = 0
             for row in working_rows:
-                value = row.get(operation["column"], "")
+                value = row.get(column, "")
                 if value in mapping:
-                    row[operation["column"]] = mapping[value]
+                    row[column] = mapping[value]
+                elif keep_known and value in known_values:
+                    continue
                 elif operation["on_unmapped"] == "fail":
-                    raise MoltError("UNMAPPED_VALUE", f"No mapping for {value!r} in {operation['column']}.", details={"column": operation["column"], "value": value})
+                    unmapped_count += 1
+            if unmapped_count and operation["on_unmapped"] == "fail":
+                raise MoltError(
+                    "UNMAPPED_VALUE",
+                    f"Unmapped value in column {column}, {unmapped_count} row(s).",
+                    details={"column": column, "unmapped_count": unmapped_count},
+                )
         elif op_type == "split_column":
             column = operation["column"]
             output_columns = operation["output_columns"]
@@ -414,7 +439,7 @@ def _apply_operation(operation: dict[str, Any], working_headers: list[str], work
 
 
 def execute_recipe(recipe: dict[str, Any], headers: list[str], rows: list[dict[str, str]]) -> tuple[list[str], list[dict[str, str]]]:
-    validate_recipe(recipe)
+    recipe = validate_recipe(recipe)
     check_contract(recipe, headers)
     working_headers = list(headers)
     working_rows = [dict(row) for row in rows]
@@ -438,7 +463,7 @@ def execute_recipe_resumable(
     crash_after: int | None = None,
 ) -> tuple[list[str], list[dict[str, str]], int]:
     """Execute one operation at a time and persist the last completed step."""
-    validate_recipe(recipe)
+    recipe = validate_recipe(recipe)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     state_path = checkpoint_dir / "state.json"
     if resume and state_path.exists():
@@ -494,7 +519,7 @@ def write_csv_atomic(path: Path, headers: list[str], rows: list[dict[str, str]])
 
 
 def verify_recipe(recipe: dict[str, Any], fixtures: list[tuple[Path, Path]]) -> dict[str, Any]:
-    validate_recipe(recipe)
+    recipe = validate_recipe(recipe)
     results: list[dict[str, Any]] = []
     for input_path, expected_path in fixtures:
         try:
