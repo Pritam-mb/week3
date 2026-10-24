@@ -1,0 +1,1897 @@
+{
+  "after_summary": {
+    "catch_rate": 1.0,
+    "caught": 20,
+    "fixture_verification_failures": 15,
+    "missed": 0,
+    "misses": [],
+    "no_observed_effect": [],
+    "runtime_recipe_schema_rejections": 1,
+    "schema_rejections_before_fixtures": 4,
+    "total": 20
+  },
+  "before_summary": {
+    "catch_rate": 0.9,
+    "caught": 18,
+    "fixture_verification_failures": 13,
+    "missed": 2,
+    "misses": [
+      "dedupe_wrong_column",
+      "preserve_unknown_policy"
+    ],
+    "no_observed_effect": [
+      "dedupe_wrong_column",
+      "preserve_unknown_policy"
+    ],
+    "runtime_recipe_schema_rejections": 1,
+    "schema_rejections_before_fixtures": 4,
+    "total": 20
+  },
+  "comparison_scope": "Before reruns the transcript-recovered mutations on golden + heldout with current code; the historical 18/20 file is preserved. After adds dedupe-key and unknown-category expected-error fixtures.",
+  "correct_recipe": {
+    "after": {
+      "caught": false,
+      "checks_failed": 0,
+      "checks_total": 11,
+      "failure_checks": [],
+      "failures": [],
+      "rejection_stage": "none",
+      "verification_status": "PASS"
+    },
+    "before": {
+      "caught": false,
+      "checks_failed": 0,
+      "checks_total": 8,
+      "failure_checks": [],
+      "failures": [],
+      "rejection_stage": "none",
+      "verification_status": "PASS"
+    }
+  },
+  "counting": "caught includes fixture-verification failures and separately enumerated schema rejections. All 20 remain in the denominator, including workload no-ops; fixture failures are not presented as 20 semantic defect catches.",
+  "fixtures": [
+    {
+      "expected": "examples/expected/golden.csv",
+      "input": "examples/input/golden.csv",
+      "oracle": "golden_csv"
+    },
+    {
+      "expected": "examples/expected/heldout.csv",
+      "input": "examples/input/heldout.csv",
+      "oracle": "golden_csv"
+    },
+    {
+      "expected": "examples/expected/dedupe-key.csv",
+      "input": "examples/input/dedupe-key.csv",
+      "oracle": "golden_csv"
+    },
+    {
+      "expected": "examples/expected/drift-unmapped-category.error.json",
+      "input": "examples/input/drift-unmapped-category.csv",
+      "oracle": "expected_error"
+    }
+  ],
+  "historical_summary": {
+    "catch_rate": 0.9,
+    "caught": 18,
+    "missed": 2,
+    "misses": [
+      {
+        "category": "wrong dedupe key",
+        "caught": false,
+        "failure_checks": [],
+        "name": "dedupe_wrong_column",
+        "verification_status": "PASS"
+      },
+      {
+        "category": "weak unknown policy",
+        "caught": false,
+        "failure_checks": [],
+        "name": "preserve_unknown_policy",
+        "verification_status": "PASS"
+      }
+    ],
+    "total": 20
+  },
+  "method": "Each patch starts from a deep copy of the base recipe. MoltService.create_version and verify_version run both sets. After uses production default fixture discovery. Expected CSVs/error codes are independently authored and never generated from a candidate. No model calls.",
+  "no_op_scope": "no_observed_effect compares first/second execution outputs and error codes/context on the finite fixture workload. It is not proof of global equivalence and is not counted as a caught mutation. Null means schema prevented execution.",
+  "provenance": {
+    "choices": [
+      "drop_required_output actually selects all five declared columns and drops extra notes; its historical name is imprecise.",
+      "rename_column inserts before trim and leaves later references unchanged; schema validation rejects it.",
+      "extra_fill_null and drop_dedupe refer to undeclared notes and are schema-rejected, not semantic fixture catches.",
+      "category_to_upper retains the historical index bug: after insertion, mapping/keep_known attach to parse_decimal and are schema-rejected.",
+      "wrong_decimal_separator changes only decimal_separator to comma, colliding with thousands_separator; this is a runtime recipe-schema rejection, not a semantic fixture catch."
+    ],
+    "disclosure": "The original runner was inline, not a repository file. Exact edits recovered from the session transcript are listed below. Before outcomes are checked against the saved historical report.",
+    "historical_outcome_mismatches": [],
+    "original_runner_found": false,
+    "reconstructed": false,
+    "source": "Historical inline command in the session transcript, evidence/verifier-catch-rate.json and examples/recipes/expense-v1.json"
+  },
+  "reproduction_command": "python verifier_measurement.py",
+  "results": [
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 5,
+        "checks_total": 8,
+        "failure_checks": [
+          "UNMAPPED_VALUE",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "dedupe-key.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 4,
+        "checks_total": 6,
+        "failure_checks": [
+          "UNMAPPED_VALUE",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "unrequested operation",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/1",
+          "value": {
+            "columns": [
+              "category"
+            ],
+            "mode": "upper",
+            "type": "normalize_case"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "unrequested operation",
+        "caught": true,
+        "failure_checks": [
+          "UNMAPPED_VALUE",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "name": "extra_category_casing",
+        "verification_status": "FAIL"
+      },
+      "name": "extra_category_casing",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 8,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "date"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "date"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "date"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 6,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "date"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "date"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong date format",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/1/output_format",
+          "value": "%d-%m-%Y"
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong date format",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "wrong_date_output_format",
+        "verification_status": "FAIL"
+      },
+      "name": "wrong_date_output_format",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 11,
+        "failure_checks": [
+          "UNMAPPED_VALUE"
+        ],
+        "failures": [
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "dedupe-key.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 8,
+        "failure_checks": [
+          "UNMAPPED_VALUE"
+        ],
+        "failures": [
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "UNMAPPED_VALUE",
+            "fixture": "heldout.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "missing canonical mapping",
+      "edits": [
+        {
+          "op": "remove",
+          "path": "/operations/3/mapping/Food"
+        },
+        {
+          "op": "add",
+          "path": "/operations/3/keep_known",
+          "value": false
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "missing canonical mapping",
+        "caught": true,
+        "failure_checks": [
+          "UNMAPPED_VALUE"
+        ],
+        "name": "missing_map_identity_with_keep_known_disabled",
+        "verification_status": "FAIL"
+      },
+      "name": "missing_map_identity_with_keep_known_disabled",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 10,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 1,
+              "different_columns": [],
+              "expected_rows": 2,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": false,
+        "checks_failed": 0,
+        "checks_total": 8,
+        "failure_checks": [],
+        "failures": [],
+        "rejection_stage": "none",
+        "verification_status": "PASS"
+      },
+      "category": "wrong dedupe key",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/4/key_columns",
+          "value": [
+            "merchant"
+          ]
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong dedupe key",
+        "caught": false,
+        "failure_checks": [],
+        "name": "dedupe_wrong_column",
+        "verification_status": "PASS"
+      },
+      "name": "dedupe_wrong_column",
+      "no_observed_effect": {
+        "after": false,
+        "before": true
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 4,
+        "checks_total": 8,
+        "failure_checks": [
+          "extra_column_preservation",
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": [
+                "notes"
+              ]
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": [
+                "notes"
+              ]
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": [
+                "notes"
+              ]
+            }
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 6,
+        "failure_checks": [
+          "extra_column_preservation",
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": [
+                "notes"
+              ]
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": [
+                "notes"
+              ]
+            }
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "dropped required column",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/0",
+          "value": {
+            "columns": [
+              "transaction_id",
+              "date",
+              "merchant",
+              "amount",
+              "category"
+            ],
+            "type": "select_columns"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "dropped required column",
+        "caught": true,
+        "failure_checks": [
+          "extra_column_preservation",
+          "golden_output"
+        ],
+        "name": "drop_required_output",
+        "verification_status": "FAIL"
+      },
+      "name": "drop_required_output",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 8,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [],
+              "expected_rows": 3,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [],
+              "expected_rows": 2,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [],
+              "expected_rows": 2,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 6,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [],
+              "expected_rows": 3,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [],
+              "expected_rows": 2,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong output order",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/-",
+          "value": {
+            "columns": [
+              "category",
+              "transaction_id",
+              "date",
+              "merchant",
+              "amount"
+            ],
+            "preserve_extra_columns": true,
+            "type": "reorder_columns"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong output order",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "wrong_output_column_order",
+        "verification_status": "FAIL"
+      },
+      "name": "wrong_output_column_order",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 8,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "amount"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "amount"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "amount"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 6,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "amount"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "amount"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong decimal precision",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/2/decimal_places",
+          "value": 0
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong decimal precision",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "wrong_decimal_places",
+        "verification_status": "FAIL"
+      },
+      "name": "wrong_decimal_places",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 8,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 6,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "missing trim",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/0",
+          "value": {
+            "columns": [
+              "category"
+            ],
+            "type": "trim"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "missing trim",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "remove_trim",
+        "verification_status": "FAIL"
+      },
+      "name": "remove_trim",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 10,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "category"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 3,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 7,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "category"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 3,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong canonical mapping",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/3/mapping/books",
+          "value": "Food"
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong canonical mapping",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "wrong_category_mapping",
+        "verification_status": "FAIL"
+      },
+      "name": "wrong_category_mapping",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 3,
+        "checks_total": 8,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 6,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "heldout.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "merchant"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "unrequested merchant casing",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/1",
+          "value": {
+            "columns": [
+              "merchant"
+            ],
+            "mode": "upper",
+            "type": "normalize_case"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "unrequested merchant casing",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "merchant_uppercase",
+        "verification_status": "FAIL"
+      },
+      "name": "merchant_uppercase",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 10,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [],
+              "expected_rows": 3,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 7,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [],
+              "expected_rows": 3,
+              "first_difference_row": null,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "unrequested row filter",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/0",
+          "value": {
+            "condition": {
+              "column": "category",
+              "operator": "neq",
+              "value": "books"
+            },
+            "on_no_match": "keep_empty",
+            "type": "filter_rows"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "unrequested row filter",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "filter_rows",
+        "verification_status": "FAIL"
+      },
+      "name": "filter_rows",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 6,
+        "checks_total": 8,
+        "failure_checks": [
+          "INPUT_TYPE_MISMATCH",
+          "column_order_invariant",
+          "expected_error",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "dedupe-key.csv"
+          },
+          {
+            "actual_error": "INPUT_TYPE_MISMATCH",
+            "check": "expected_error",
+            "expected_error": "UNMAPPED_VALUE",
+            "fixture": "drift-unmapped-category.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 4,
+        "checks_total": 6,
+        "failure_checks": [
+          "INPUT_TYPE_MISMATCH",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong date parser",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/1/input_formats",
+          "value": [
+            "%d/%m/%Y"
+          ]
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong date parser",
+        "caught": true,
+        "failure_checks": [
+          "INPUT_TYPE_MISMATCH",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "name": "wrong_date_input_formats",
+        "verification_status": "FAIL"
+      },
+      "name": "wrong_date_input_formats",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 6,
+        "checks_total": 8,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID",
+          "column_order_invariant",
+          "expected_error",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "RECIPE_SCHEMA_INVALID",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "RECIPE_SCHEMA_INVALID",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "RECIPE_SCHEMA_INVALID",
+            "fixture": "dedupe-key.csv"
+          },
+          {
+            "actual_error": "RECIPE_SCHEMA_INVALID",
+            "check": "expected_error",
+            "expected_error": "UNMAPPED_VALUE",
+            "fixture": "drift-unmapped-category.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "runtime_recipe_schema",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 4,
+        "checks_total": 6,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "RECIPE_SCHEMA_INVALID",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "RECIPE_SCHEMA_INVALID",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "runtime_recipe_schema",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong decimal parser",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/2/decimal_separator",
+          "value": ","
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong decimal parser",
+        "caught": true,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "name": "wrong_decimal_separator",
+        "verification_status": "FAIL"
+      },
+      "name": "wrong_decimal_separator",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "category": "unrequested rename",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/0",
+          "value": {
+            "destination": "vendor",
+            "source": "merchant",
+            "type": "rename_column"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "unrequested rename",
+        "caught": true,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "name": "rename_column",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "name": "rename_column",
+      "no_observed_effect": {
+        "after": null,
+        "before": null
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 2,
+        "checks_total": 9,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 2,
+              "header_differences": []
+            }
+          },
+          {
+            "check": "golden_output",
+            "fixture": "dedupe-key.csv",
+            "structure": {
+              "actual_rows": 2,
+              "different_columns": [
+                "amount",
+                "date",
+                "notes",
+                "transaction_id"
+              ],
+              "expected_rows": 2,
+              "first_difference_row": 1,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 7,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "failures": [
+          {
+            "check": "golden_output",
+            "fixture": "golden.csv",
+            "structure": {
+              "actual_rows": 3,
+              "different_columns": [
+                "notes"
+              ],
+              "expected_rows": 3,
+              "first_difference_row": 2,
+              "header_differences": []
+            }
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong duplicate choice",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/4/keep",
+          "value": "last"
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong duplicate choice",
+        "caught": true,
+        "failure_checks": [
+          "golden_output"
+        ],
+        "name": "dedupe_keep_last",
+        "verification_status": "FAIL"
+      },
+      "name": "dedupe_keep_last",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 1,
+        "checks_total": 11,
+        "failure_checks": [
+          "expected_error"
+        ],
+        "failures": [
+          {
+            "actual_error": null,
+            "check": "expected_error",
+            "expected_error": "UNMAPPED_VALUE",
+            "fixture": "drift-unmapped-category.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": false,
+        "checks_failed": 0,
+        "checks_total": 8,
+        "failure_checks": [],
+        "failures": [],
+        "rejection_stage": "none",
+        "verification_status": "PASS"
+      },
+      "category": "weak unknown policy",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/3/on_unmapped",
+          "value": "preserve"
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "weak unknown policy",
+        "caught": false,
+        "failure_checks": [],
+        "name": "preserve_unknown_policy",
+        "verification_status": "PASS"
+      },
+      "name": "preserve_unknown_policy",
+      "no_observed_effect": {
+        "after": false,
+        "before": true
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "category": "unrequested fill",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/-",
+          "value": {
+            "columns": [
+              "notes"
+            ],
+            "type": "fill_null",
+            "value": "unknown"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "unrequested fill",
+        "caught": true,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "name": "extra_fill_null",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "name": "extra_fill_null",
+      "no_observed_effect": {
+        "after": null,
+        "before": null
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "category": "missing dedupe",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/4",
+          "value": {
+            "columns": [
+              "notes"
+            ],
+            "type": "trim"
+          }
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "missing dedupe",
+        "caught": true,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "name": "drop_dedupe",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "name": "drop_dedupe",
+      "no_observed_effect": {
+        "after": null,
+        "before": null
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 6,
+        "checks_total": 8,
+        "failure_checks": [
+          "INPUT_TYPE_MISMATCH",
+          "column_order_invariant",
+          "expected_error",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "dedupe-key.csv"
+          },
+          {
+            "actual_error": "INPUT_TYPE_MISMATCH",
+            "check": "expected_error",
+            "expected_error": "UNMAPPED_VALUE",
+            "fixture": "drift-unmapped-category.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 4,
+        "checks_total": 6,
+        "failure_checks": [
+          "INPUT_TYPE_MISMATCH",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "failures": [
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "INPUT_TYPE_MISMATCH",
+            "fixture": "heldout.csv"
+          },
+          {
+            "check": "column_order_invariant",
+            "fixture": "golden.csv"
+          },
+          {
+            "check": "extra_column_preservation",
+            "fixture": "golden.csv"
+          }
+        ],
+        "rejection_stage": "fixture_verification",
+        "verification_status": "FAIL"
+      },
+      "category": "wrong operation column",
+      "edits": [
+        {
+          "op": "replace",
+          "path": "/operations/2/column",
+          "value": "date"
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong operation column",
+        "caught": true,
+        "failure_checks": [
+          "INPUT_TYPE_MISMATCH",
+          "column_order_invariant",
+          "extra_column_preservation"
+        ],
+        "name": "date_as_decimal",
+        "verification_status": "FAIL"
+      },
+      "name": "date_as_decimal",
+      "no_observed_effect": {
+        "after": false,
+        "before": false
+      }
+    },
+    {
+      "after": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "before": {
+        "caught": true,
+        "checks_failed": 0,
+        "checks_total": 0,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "failures": [],
+        "rejection_stage": "schema_before_fixtures",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "category": "wrong category output vocabulary",
+      "edits": [
+        {
+          "op": "add",
+          "path": "/operations/1",
+          "value": {
+            "columns": [
+              "category"
+            ],
+            "mode": "upper",
+            "type": "normalize_case"
+          }
+        },
+        {
+          "op": "add",
+          "path": "/operations/3/mapping",
+          "value": {
+            "BOOKS": "Books",
+            "FOOD & DRINK": "Food",
+            "TRANSIT": "Transport"
+          }
+        },
+        {
+          "op": "add",
+          "path": "/operations/3/keep_known",
+          "value": true
+        }
+      ],
+      "historical_outcome_reproduced": true,
+      "historical_result": {
+        "category": "wrong category output vocabulary",
+        "caught": true,
+        "failure_checks": [
+          "RECIPE_SCHEMA_INVALID"
+        ],
+        "name": "category_to_upper",
+        "verification_status": "REJECTED_BEFORE_FIXTURES"
+      },
+      "name": "category_to_upper",
+      "no_observed_effect": {
+        "after": null,
+        "before": null
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source_sha256": {
+    "evidence/verifier-catch-rate.json": "4b4c29f0f2cbe0483c3693e750a211db2f84744124da3a513a7dbf488d775ea2",
+    "examples/expected/dedupe-key.csv": "ec013c28597a1169a001c23e9113fb53bf432756b3dc727173c10817a49977df",
+    "examples/expected/drift-unmapped-category.error.json": "9cd96ba9f26d239c2647cf395463db7263c1a2fe5f57a1fc1b33f0e8076a9243",
+    "examples/expected/golden.csv": "3e402784d771b83bea6572f48935c5afcfa805682346c19edd4d5a9783a46947",
+    "examples/expected/heldout.csv": "4606bc8d1b8d94d05877f80833bc82fd7f517b8b3f22fa77db95d32233aba127",
+    "examples/input/dedupe-key.csv": "5a9952b1cbe0f791c258d5804e48d3ec326447b81b5e1d56aceae2285482448e",
+    "examples/input/drift-unmapped-category.csv": "7bf0a3b8b16393c9395b76ca8511d3af3f715367cc96379efb893167234dcb0b",
+    "examples/input/golden.csv": "2e9a1b57e716cdccd5275bbcbcb0a43d47d291abfd846cb15390ed6b3883da74",
+    "examples/input/heldout.csv": "9ce66365db445a88e405e6be28afa33333bc5b144bbb7c2935c7abd637799634",
+    "examples/recipes/expense-v1.json": "6de1e11b18aab9e8e3b66a8cf72960725f655318db64c51b98c7e31c5feab883",
+    "molt/application.py": "97da0c5a17097af523a836b7b025ec350d5df1fd635431c7912c7075eb2461e9",
+    "molt/core.py": "6fd9a7d848088f165d7123ad541959ba84d879ed65d074bdabc80cc4efd2b6cc",
+    "verifier_measurement.py": "34ebd72b90ab69149e0847b53ad64cfdf04461ac352f9320d8f4fe2f8af975c0"
+  }
+}

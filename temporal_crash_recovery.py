@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from temporalio.testing import WorkflowEnvironment
+from temporalio.api.enums.v1 import EventType
 from temporalio.worker import Worker
 from temporalio.worker.workflow_sandbox import SandboxRestrictions, SandboxedWorkflowRunner
 
@@ -28,21 +29,15 @@ TASK_QUEUE = "molt-crash-evidence"
 
 
 def _event_type(event: Any) -> str:
-    value = getattr(event, "event_type", "")
-    name = getattr(value, "name", None)
-    if name:
-        return str(name)
-    numeric = int(value) if isinstance(value, int) else None
-    return {
-        1: "WORKFLOW_EXECUTION_STARTED",
-        2: "WORKFLOW_EXECUTION_COMPLETED",
-        5: "ACTIVITY_TASK_SCHEDULED",
-        6: "ACTIVITY_TASK_STARTED",
-        7: "ACTIVITY_TASK_COMPLETED",
-        10: "ACTIVITY_TASK_FAILED",
-        11: "TIMER_STARTED",
-        12: "TIMER_FIRED",
-    }.get(numeric, str(value))
+    return EventType.Name(event.event_type).removeprefix("EVENT_TYPE_")
+
+
+def activity_attempts(history: list[Any]) -> int:
+    # Intermediate activity retries may be omitted from history. The final
+    # started event's attempt field, not a count of events, is authoritative
+    # for this workflow's single activity.
+    return max((event.activity_task_started_event_attributes.attempt for event in history
+                if event.event_type == EventType.EVENT_TYPE_ACTIVITY_TASK_STARTED), default=0)
 
 
 async def run() -> dict[str, Any]:
@@ -96,7 +91,7 @@ async def run() -> dict[str, Any]:
             else:
                 os.environ["MOLT_CRASH_AT"] = previous
 
-        attempts = sum("ACTIVITY_TASK_STARTED" in _event_type(event) for event in history)
+        attempts = activity_attempts(history)
         checkpoint_state = list(config.checkpoints_dir.glob("*/state.json"))
         return {
             "status": "COMPLETE" if result.get("status") == "SUCCEEDED" and attempts >= 2 else "FAILED",

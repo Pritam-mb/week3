@@ -26,7 +26,11 @@ zero.
   ladder files are unchanged. This is not pass@5; each new trial allows three requests.
 - `verifier-catch-rate-after.json` — exact historical mutations recovered from
   the session command: before 18/20, after 20/20; schema vs fixture catches are
-  separated. Reproduce with `python verifier_measurement.py --check`.
+  separated. This is the historical source-hash snapshot; it is preserved.
+- `verifier-final-guardrails.json` — same mutation outcomes after the final
+  compiler/recovery hardening, with current source hashes. Reproduce with
+  `python verifier_measurement.py --check --output evidence/verifier-final-guardrails.json`.
+  The original snapshot's default `--check` now differs only in source hashes.
 - `tabpfn-accuracy.json` — live synthetic supervised holdout confusion matrix,
   precision, recall and false positives. Reproduce with `tabpfn_accuracy.py`.
 - `TABPFN_PROOF.md` — explains why there is no hosted dashboard receipt and
@@ -58,6 +62,13 @@ zero.
 - `temporal-crash-recovery.json` — real local Temporal server/worker workflow
   with one injected activity failure, two activity attempts and checkpoint
   resume; not a production durability claim.
+- `temporal-chaos.json` — real HTTP API, local persistent Temporal dev server,
+  and production worker: two worker SIGKILLs, one server SIGKILL, three CSVs
+  (two matching independent oracles; one drift block), and idempotent replay.
+  Deterministic test-only checkpoint barriers, fixture recipe and scripted
+  approval; not random fault timing, live Gemma inference, or production proof.
+- `SLOW_AND_STEADY_HANDOFF.md` — final implementation scope, reproducible checks,
+  claim boundaries, and the technical material ready for the post-writing pass.
 
 ## Claim boundary
 

@@ -2,6 +2,10 @@
 
 ## Decision
 
+Final implementation pass (2026-10-24): use the user's Week 3 **Slow and steady**
+framing. Stop feature expansion after compiler guardrails and local Temporal
+recovery evidence; the next task is the post, not another integration.
+
 Molt will be a local-first CSV automation tool for repetitive expense/export cleanup. It treats an open-weight local model as a **compiler**, not as the runtime:
 
 > The model proposes. Tests decide. A human approves. Deterministic execution does the repetition.
@@ -73,6 +77,10 @@ The full local MVP now includes:
 - checkpoint-capable runtime retained for crash/resume flows;
 - polling watched-folder orchestration with archive/done/quarantine routing;
 - loopback HTTP API and dependency-free browser dashboard;
+- Temporal start/status API and dashboard durable-run action for approved recipes;
+- persistent local-server restart and two worker-process-kill evidence, plus
+  dashboard polling that distinguishes workflow completion from drift;
+- strict model JSON/profile checks with bounded, value-free rejection summaries;
 - derived savings metrics from persisted execution and ledger records;
 - unit, service, watcher, and HTTP integration tests.
 

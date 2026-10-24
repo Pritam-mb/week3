@@ -53,6 +53,7 @@ _SAFE_MODEL_ERROR_MESSAGES = {
     "UNSUPPORTED_OPERATION": "The previous candidate used an operation outside Molt's allowlist; use only the operations listed in the compiler instructions.",
     "MODEL_RESPONSE_INVALID": "The previous response was not a valid constrained recipe JSON object.",
     "MODEL_PROMPT_TOO_LARGE": "The previous model context exceeded Molt's prompt budget; keep the recipe concise.",
+    "RECIPE_INPUT_CONTRACT_MISMATCH": "The previous input contract was incompatible with the profile; require only observed columns and allow existing unrelated columns.",
 }
 
 

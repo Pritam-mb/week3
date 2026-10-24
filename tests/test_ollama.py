@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import os
 import socket
 import tempfile
@@ -42,7 +43,7 @@ class OllamaTests(unittest.TestCase):
             return FakeResponse({"model": "gemma3:4b", "response": json.dumps(recipe), "prompt_eval_count": 12, "eval_count": 20})
 
         with patch("molt.ollama.urlopen", fake_urlopen):
-            candidate, metadata = generate_recipe("gemma3:4b", "Normalize expenses", {"columns": ["merchant"], "sample": [{"merchant": "PRIVATE_VALUE"}]}, endpoint="http://ollama.test", timeout=3)
+            candidate, metadata = generate_recipe("gemma3:4b", "Normalize expenses", {"columns": recipe["input_contract"]["required_columns"], "sample": [{"merchant": "PRIVATE_VALUE"}]}, endpoint="http://ollama.test", timeout=3)
         payload = json.loads(captured["request"].data.decode("utf-8"))
         self.assertEqual(candidate["name"], recipe["name"])
         self.assertEqual(metadata["llm_calls"], 1)
@@ -62,6 +63,55 @@ class OllamaTests(unittest.TestCase):
                 generate_recipe("gemma3:4b", "bad", {"columns": []})
         self.assertIn(context.exception.code, {"UNSUPPORTED_OPERATION", "RECIPE_SCHEMA_INVALID"})
 
+    def test_hallucinated_input_contract_is_rejected_without_values_in_error(self) -> None:
+        recipe = load_json(ROOT / "examples/recipes/expense-v1.json")
+        with patch("molt.ollama.urlopen", return_value=FakeResponse({"response": json.dumps(recipe)})):
+            with self.assertRaises(MoltError) as context:
+                generate_recipe("gemma3:4b", "Trim merchant", {"columns": ["merchant"], "sample": [{"merchant": "PRIVATE_VALUE"}]})
+        self.assertEqual(context.exception.code, "RECIPE_INPUT_CONTRACT_MISMATCH")
+        self.assertNotIn("PRIVATE_VALUE", str(context.exception) + json.dumps(context.exception.details))
+
+    def test_ambiguous_or_incomplete_json_is_rejected(self) -> None:
+        recipe = load_json(ROOT / "examples/recipes/expense-v1.json")
+        raw = json.dumps(recipe)
+        envelopes = [
+            {"response": raw, "done": False},
+            {"response": raw, "done_reason": "length"},
+            {"response": raw.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1')},
+            {"response": raw.replace('"schema_version": 1', '"schema_version": NaN')},
+            {"response": "```json\n" + raw + "\n```"},
+        ]
+        for envelope in envelopes:
+            with self.subTest(envelope=envelope), patch("molt.ollama.urlopen", return_value=FakeResponse(envelope)):
+                with self.assertRaises(MoltError) as context:
+                    generate_recipe("gemma3:4b", "Normalize", {"columns": recipe["input_contract"]["required_columns"]})
+                self.assertEqual(context.exception.code, "MODEL_RESPONSE_INVALID")
+
+    def test_malformed_nested_recipe_fields_fail_closed(self) -> None:
+        base = load_json(ROOT / "examples/recipes/expense-v1.json")
+        mutations = [
+            ("schema_version", True),
+            ("description", {}),
+            ("input_contract", {"required_columns": ["merchant", "merchant"]}),
+            ("output_contract", {"required_columns": [{}], "preserve_extra_columns": True}),
+            ("operations", [{"type": ["trim"], "columns": ["merchant"]}]),
+            ("operations", [{"type": "trim", "column": "merchant"}]),
+            ("operations", [{"type": "dedupe", "key_columns": [{}], "keep": "first"}]),
+            ("operations", [{"type": "normalize_case", "columns": ["merchant"], "mode": []}]),
+            ("operations", [{"type": "split_column", "column": "merchant", "delimiter": "", "output_columns": ["part"], "on_missing": "fail"}]),
+            ("operations", [{"type": "run_shell", "command": "not executed"}]),
+            ("operations", [{"type": "filter_rows", "condition": {"column": "merchant", "operator": "in", "value": 1}, "on_no_match": "keep_empty"}]),
+            ("operations", [{"type": "validate_values", "column": "merchant", "allowed_values": [{}], "on_error": "fail"}]),
+            ("operations", [{"type": "validate_values", "column": "amount", "min": "NaN", "on_error": "fail"}]),
+        ]
+        for field, value in mutations:
+            candidate = copy.deepcopy(base)
+            candidate[field] = value
+            with self.subTest(field=field, value=value), patch("molt.ollama.urlopen", return_value=FakeResponse({"response": json.dumps(candidate)})):
+                with self.assertRaises(MoltError) as context:
+                    generate_recipe("gemma3:4b", "Normalize", {"columns": base["input_contract"]["required_columns"]})
+                self.assertIn(context.exception.code, {"RECIPE_SCHEMA_INVALID", "UNSUPPORTED_OPERATION"})
+
     def test_readiness_distinguishes_missing_model(self) -> None:
         with patch("molt.ollama.urlopen", lambda request, timeout: FakeResponse({"models": [{"name": "other:latest"}]})):
             result = readiness("http://ollama.test", "gemma3:4b")
@@ -74,7 +124,7 @@ class OllamaTests(unittest.TestCase):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
             return FakeResponse({"response": json.dumps(recipe)})
         with patch("molt.ollama.urlopen", fake_urlopen):
-            generate_recipe("gemma3:4b", "Repair it", {"columns": ["category"]}, active_recipe=recipe, drift_report={"code": "UNMAPPED_VALUE", "column": "category"})
+            generate_recipe("gemma3:4b", "Repair it", {"columns": recipe["input_contract"]["required_columns"]}, active_recipe=recipe, drift_report={"code": "UNMAPPED_VALUE", "column": "category"})
         prompt = captured["payload"]["prompt"]
         self.assertIn("UNMAPPED_VALUE", prompt)
         self.assertIn("normalize_expense_export", prompt)

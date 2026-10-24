@@ -1,5 +1,27 @@
 # Post audit — submission pass
 
+## Final implementation addendum — 2026-10-24
+
+The next writing pass should use the user's **Slow and steady** theme. The draft
+has not yet been rewritten for the following additions:
+
+- `temporal-chaos.json`: two worker SIGKILLs and one persistent local Temporal
+  server SIGKILL/restart; recovery on attempt 3; two oracle-matching compatible
+  outputs; one drift block with one attempt; replay without output replacement;
+  zero execution model calls. Fixture recipe, scripted approval, deterministic
+  barriers, retained local workspace. Not Cloud, random kills, model-call retries,
+  power-loss testing or production durability.
+- Gemma guardrails: strict JSON/nested-field/profile checks, bounded attempt
+  summaries, early stop for unfixable setup errors. Regression-tested with
+  controlled responses; **no new live Gemma accuracy measurement**.
+- `verifier-final-guardrails.json`: current-code source hashes and unchanged
+  18/20 → same mutations 20/20 results. The older default snapshot check differs
+  only in source hashes; preserve the historical files.
+- Current Python suite: 78 passed, 20 subtests passed, one pre-existing `cgi`
+  warning. Dashboard behavior: 3 Node tests passed (mock DOM, not visual review).
+
+Details and reproduction commands: `SLOW_AND_STEADY_HANDOFF.md`.
+
 ## Claim-to-source map
 
 | Claim in POST_DRAFT.md | Source | Boundary |

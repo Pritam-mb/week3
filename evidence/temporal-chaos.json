@@ -1,0 +1,63 @@
+{
+  "batch": {
+    "blocked_drift": 1,
+    "execution_records": 3,
+    "input_files": 3,
+    "model_calls": 0,
+    "replay_workflows": 1,
+    "successful_outputs": 2
+  },
+  "checks": {
+    "drift_not_retried": true,
+    "drift_quarantined_without_output": true,
+    "independent_oracles_match": true,
+    "output_not_rewritten": true,
+    "replay_idempotent": true,
+    "retry_attempts_observed": true,
+    "source_bytes_preserved": true,
+    "successful_files": true,
+    "zero_run_model_calls": true
+  },
+  "claim_boundary": "Real local HTTP API, Temporal dev server and production worker; synthetic CSVs, fixture recipe, scripted approval. Two worker process kills and one persistent-server process kill. No live Gemma compilation, model API retry/cache, power-loss, multi-host, or production durability claim. Shared workspace retained; approval/input unchanged during recovery.",
+  "duration_seconds": 49.33,
+  "failure_injection": {
+    "completed_checkpoints_not_rewritten": 2,
+    "method": "SIGKILL",
+    "server_persistence": "Same local SQLite file and port after restart",
+    "server_process_kills": 1,
+    "timing": "Deterministic test-only barriers after checkpoints 1 and 2; not random kills",
+    "worker_process_kills": 2
+  },
+  "recorded_at": "2026-10-24T12:28:36.954865+00:00",
+  "status": "COMPLETE",
+  "workflows": [
+    {
+      "activity_attempts": 3,
+      "case": "checkpoint_recovery",
+      "molt_status": "SUCCEEDED",
+      "outcome": "completed",
+      "temporal_status": "COMPLETED"
+    },
+    {
+      "activity_attempts": 1,
+      "case": "compatible_reuse",
+      "molt_status": "SUCCEEDED",
+      "outcome": "completed",
+      "temporal_status": "COMPLETED"
+    },
+    {
+      "activity_attempts": 1,
+      "case": "drift",
+      "molt_status": "BLOCKED_DRIFT",
+      "outcome": "drift",
+      "temporal_status": "COMPLETED"
+    },
+    {
+      "activity_attempts": 1,
+      "case": "replay",
+      "molt_status": "SUCCEEDED",
+      "outcome": "idempotent_replay",
+      "temporal_status": "COMPLETED"
+    }
+  ]
+}

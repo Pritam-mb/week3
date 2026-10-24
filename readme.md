@@ -22,7 +22,7 @@ python -m molt demo --offline --approve
 
 The demo shows compile, verification, approval, two deterministic reuse runs with zero additional model calls, and two drift cases that are blocked and copied to the selected workspace quarantine directory.
 
-Developer checks: `python -m unittest discover -s tests -v` and `python bench.py`.
+Developer checks: `python -m pytest -q`, `node --test tests/test_dashboard.cjs`, and `python bench.py`.
 
 Repair candidates are deliberately separate from the active recipe:
 
@@ -70,6 +70,31 @@ python -m molt --state-dir workspace doctor --require-ollama
 ```
 
 If Ollama is unavailable, already-approved recipes can still run deterministically. New compile and repair requests fail clearly; Molt never silently switches to a hosted model.
+
+### Slow and steady: the compiler rejection boundary
+
+The model proposes a recipe, not executable code. Before activation:
+
+1. Response size/time limits apply; incomplete responses, duplicate JSON keys,
+   non-finite JSON constants, and non-JSON prose are rejected.
+2. The runtime checks the allowlisted operations, argument types, unique column
+   names, and operation order. A model cannot substitute `trim.column` for
+   `trim.columns` or invent an executable operation.
+3. The input contract must fit the profiled CSV. Missing required columns and
+   contradictory extra-column policies fail before a version is stored.
+4. Independent expected-output/error fixtures and invariants decide whether a
+   schema-valid candidate is acceptable. The model cannot author its own oracle.
+5. Generation errors and verification failures share one budget: by default,
+   **three requests total**, not three retries at each layer. Missing-model and
+   oversized-prompt errors stop early. Attempt summaries contain codes/counts,
+   not raw responses or fixture values, and are attached to the version or error.
+6. A passing candidate waits for explicit approval. Rejected candidates cannot
+   replace the active recipe. Compatible execution makes zero model calls.
+
+These checks are not a proof of correctness on all inputs. Fixture coverage
+matters. The historical full-expense Gemma result remains **0/5**, including the
+separate bounded follow-up; this final guardrail pass did not rerun that model
+experiment or claim improved generation accuracy.
 
 ### Optional TabPFN advisory analysis
 
@@ -160,6 +185,78 @@ python -m molt --state-dir workspace watch
 ```
 
 The dashboard exposes real SQLite-backed automations, recipe versions, verification evidence, runs, drift reports, repair proposals, and savings metrics. The API is loopback-only and the deterministic runtime never calls the model during a compatible run.
+
+### Optional Temporal durable execution
+
+Temporal is an optional durable boundary around an already approved recipe. It
+does not compile recipes or replace Molt's verifier. Install the SDK and run a
+Temporal server plus a worker:
+
+```text
+python -m pip install -e ".[temporal]"
+```
+
+With the Temporal CLI installed, run a persistent local development server in
+one terminal, then the worker in another. No Cloud account is involved:
+
+```text
+temporal server start-dev --db-filename workspace/temporal-local.sqlite
+```
+
+```text
+python -m molt --state-dir workspace temporal worker
+```
+
+The default connection is `127.0.0.1:7233`, namespace `default`, task queue
+`molt`. Override them with `MOLT_TEMPORAL_ADDRESS`,
+`MOLT_TEMPORAL_NAMESPACE`, and `MOLT_TEMPORAL_TASK_QUEUE`. No sponsor API key
+is needed for a local Temporal server. Temporal Cloud or a secured deployment
+will additionally require its endpoint, TLS and authentication configuration.
+
+Start a durable run from the CLI:
+
+```text
+python -m molt --state-dir workspace temporal start \
+  --automation-id <automation-id> \
+  --input workspace/in/input.csv
+```
+
+The dashboard also exposes `Run durably` for approved recipes, backed by:
+
+```text
+POST /api/automations/{id}/temporal-runs
+GET  /api/temporal-runs/{workflow_id}
+```
+
+The API accepts `wait`, `workflow_id`, `activity_timeout_seconds`, `address`,
+`namespace`, and `task_queue`. The workflow uses Molt's checkpointed service,
+stable workflow IDs and activity retry policy. Drift is returned as a terminal
+data result rather than blindly retried. The dashboard polls status and shows
+the Molt outcome separately: Temporal `COMPLETED` can mean Molt `BLOCKED_DRIFT`,
+not a successful CSV output. It remembers the latest workflow ID on reload;
+automatic checks pause after 100 polls and Refresh checks again.
+
+Two reproducible evidence commands (optional SDK and Temporal CLI required):
+
+```text
+python temporal_crash_recovery.py
+python temporal_chaos.py
+```
+
+If the CLI is not on PATH, use `python temporal_chaos.py --temporal-cli <path>`.
+The second script starts isolated local processes and uses the real HTTP API.
+It kills its worker twice at deterministic checkpoint barriers, kills and
+restarts its server once using the same SQLite file, then checks two compatible
+files, one drift file, and an idempotent replay. It cleans up only its own
+processes. Results: `evidence/temporal-chaos.json`; the smaller injected-exception
+check remains in `evidence/temporal-crash-recovery.json`.
+
+Checkpoint metadata is atomically replaced. Final service outputs are published
+without replacement; a retry after output publication may reconcile identical
+bytes from a completed checkpoint without rewriting them. This requires the
+same retained local workspace. The demonstrated interruptions are process kills,
+not power loss, concurrent multi-host writes, Cloud deployment, or production
+durability. Compilation/model API calls are **outside** this Temporal workflow.
 
 If port `8765` is already in use, choose another configured port:
 

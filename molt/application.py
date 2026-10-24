@@ -12,6 +12,7 @@ from typing import Any
 from .config import MoltConfig
 from .core import (
     MoltError,
+    canonical_csv,
     check_contract,
     execute_recipe,
     execute_recipe_resumable,
@@ -221,6 +222,7 @@ class MoltService:
         last_version: dict[str, Any] | None = None
         previous_recipe: dict[str, Any] | None = None
         feedback: dict[str, Any] | None = None
+        attempt_log: list[dict[str, Any]] = []
         for attempt in range(1, self.config.ollama_max_retries + 2):
             metadata["attempts"] = attempt
             try:
@@ -242,7 +244,10 @@ class MoltService:
                 if exc.code != "MODEL_PROMPT_TOO_LARGE":
                     metadata["llm_calls"] += 1
                 last_error = exc
+                attempt_log.append({"attempt": attempt, "status": "REJECTED", "stage": "generation", "code": exc.code})
                 feedback = safe_model_error(exc.code)
+                if exc.code in {"MODEL_PROMPT_TOO_LARGE", "MODEL_NOT_FOUND"}:
+                    break
                 continue
 
             reported_calls = call_metadata.get("llm_calls", 1)
@@ -252,6 +257,7 @@ class MoltService:
                 if isinstance(value, int):
                     metadata[key] += value
             metadata.update({key: value for key, value in call_metadata.items() if key not in {"llm_calls", "prompt_tokens", "response_tokens"}})
+            metadata["attempt_log"] = list(attempt_log)
 
             version = self.create_version(
                 automation_id,
@@ -268,6 +274,18 @@ class MoltService:
                 "verification_attempt": attempt,
                 "verification_failures": verification["checks_failed"],
             }
+            attempt_log.append({
+                "attempt": attempt,
+                "status": "ACCEPTED" if verification["status"] == "PASS" else "REJECTED",
+                "stage": "fixture_verification",
+                "checks_total": verification["checks_total"],
+                "checks_failed": verification["checks_failed"],
+            })
+            final_metadata["attempt_log"] = list(attempt_log)
+            final_metadata["validation_gate"] = dict(call_metadata.get("validation_gate", {})) | {
+                "recipe_schema": "PASS",
+                "fixture_verification": verification["status"],
+            }
             self._update_provider_metadata(version["id"], final_metadata)
             version = self.get_version(version["id"])
             version["provider_metadata"] = final_metadata
@@ -280,11 +298,17 @@ class MoltService:
             last_error = MoltError("RECIPE_VERIFICATION_FAILED", "The candidate failed independent verification.")
 
         if last_version is not None:
-            final_metadata = metadata | {"verification_retry_exhausted": True}
+            final_metadata = last_version["provider_metadata"] | metadata | {
+                "verification_retry_exhausted": True,
+                "attempt_log": list(attempt_log),
+                "validation_gate": last_version["provider_metadata"]["validation_gate"],
+            }
             self._update_provider_metadata(last_version["id"], final_metadata)
             last_version["provider_metadata"] = final_metadata
             return last_version
-        raise last_error or MoltError("MODEL_RESPONSE_INVALID", "Recipe compilation failed after the configured attempts.")
+        error = last_error or MoltError("MODEL_RESPONSE_INVALID", "Recipe compilation failed after the configured attempts.")
+        error.details = {"attempts": metadata["attempts"], "llm_calls": metadata["llm_calls"], "attempt_log": list(attempt_log)}
+        raise error
 
     def _generate_candidate(self, automation_id: str, task: str, profile: dict[str, Any], *, recipe_file: str | None = None, model: str | None = None) -> dict[str, Any]:
         if recipe_file:
@@ -522,7 +546,15 @@ class MoltService:
             if time.perf_counter() - started > self.config.max_execution_seconds:
                 raise MoltError("EXECUTION_TIMEOUT", "Execution exceeded the configured time limit.")
             formula_warnings = formula_injection_warnings(actual_rows)
-            write_csv_atomic(output, actual_headers, actual_rows)
+            try:
+                write_csv_atomic(output, actual_headers, actual_rows, overwrite=False)
+            except FileExistsError as exc:
+                # A worker may die after publishing but before recording the
+                # run in SQLite. Reconcile only an identical completed result;
+                # never replace an existing file, even on checkpoint replay.
+                expected = canonical_csv(actual_headers, actual_rows).encode("utf-8")
+                if not checkpoint_done or output.read_bytes() != expected:
+                    raise MoltError("OUTPUT_WRITE_FAILED", "Output already exists; overwrite is disabled.") from exc
             status = "SUCCEEDED"
             error_code = None
             error_message = None
@@ -577,6 +609,63 @@ class MoltService:
     def list_watched_folders(self) -> list[dict[str, Any]]:
         with closing(self.db.connect()) as connection:
             return [dict(row) for row in connection.execute("SELECT * FROM watched_folders ORDER BY created_at").fetchall()]
+
+    def start_temporal_run(
+        self,
+        automation_id: str,
+        input_path: str | Path,
+        *,
+        output_path: str | Path | None = None,
+        workflow_id: str | None = None,
+        wait: bool = True,
+        activity_timeout_seconds: int = 300,
+        address: str | None = None,
+        namespace: str | None = None,
+        task_queue: str | None = None,
+    ) -> dict[str, Any]:
+        """Start an approved recipe through Temporal without exposing file data."""
+        if not input_path:
+            raise MoltError("TEMPORAL_REQUEST_INVALID", "input_reference is required for a Temporal run.")
+        automation = self.get_automation(automation_id)
+        if not automation.get("active_version"):
+            raise MoltError("APPROVAL_REQUIRED", "Temporal runs require an active approved recipe.")
+        input_candidate = Path(input_path)
+        if not input_candidate.is_absolute():
+            input_candidate = self.config.workspace / input_candidate
+        output_candidate = Path(output_path) if output_path else None
+        if output_candidate is not None and not output_candidate.is_absolute():
+            output_candidate = self.config.workspace / output_candidate
+        safe_input = self._safe_path(input_candidate)
+        safe_output = self._safe_path(output_candidate, must_exist=False) if output_candidate else None
+        from .temporal import build_run_request, default_workflow_id, start_workflow
+
+        request = build_run_request(self.config.workspace, automation_id, safe_input, safe_output, activity_timeout_seconds=activity_timeout_seconds)
+        result = start_workflow(
+            request,
+            workflow_id=workflow_id or default_workflow_id(self.config.workspace, automation_id, safe_input),
+            address=address or self.config.temporal_address,
+            namespace=namespace or self.config.temporal_namespace,
+            task_queue=task_queue or self.config.temporal_task_queue,
+            wait=wait,
+        )
+        output: dict[str, Any] = {
+            "workflow_id": result.get("workflow_id"),
+            "run_id": result.get("run_id"),
+            "status": "COMPLETED" if wait and "result" in result else "STARTED",
+            "temporal_address": address or self.config.temporal_address,
+            "namespace": namespace or self.config.temporal_namespace,
+            "task_queue": task_queue or self.config.temporal_task_queue,
+        }
+        if wait:
+            workflow_result = result.get("result") or {}
+            output["result"] = {
+                "status": workflow_result.get("status"),
+                "temporal_outcome": workflow_result.get("temporal_outcome"),
+                "rows_read": workflow_result.get("rows_read"),
+                "rows_written": workflow_result.get("rows_written"),
+                "llm_calls": workflow_result.get("llm_calls"),
+            }
+        return output
 
     def _audit(self, connection: Any, entity_type: str, entity_id: str, event_type: str, details: dict[str, Any]) -> None:
         connection.execute("INSERT INTO audit_events(id,entity_type,entity_id,event_type,details_json,created_at) VALUES(?,?,?,?,?,?)", (new_id("audit"), entity_type, entity_id, event_type, json_text(details), now()))

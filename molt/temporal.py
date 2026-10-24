@@ -295,6 +295,35 @@ def start_workflow(
     return asyncio.run(_start_workflow(request, workflow_id=workflow_id, address=address, namespace=namespace, task_queue=task_queue, wait=wait))
 
 
+async def _describe_workflow(*, workflow_id: str, address: str, namespace: str) -> dict[str, Any]:
+    require_temporal()
+    assert _TemporalClient is not None
+    client = await _TemporalClient.connect(address, namespace=namespace)
+    handle = client.get_workflow_handle(workflow_id)
+    description = await handle.describe()
+    status = getattr(getattr(description, "status", None), "name", str(getattr(description, "status", "UNKNOWN")))
+    response = {
+        "workflow_id": workflow_id,
+        "status": status,
+        "run_id": getattr(description, "run_id", None),
+        "workflow_type": getattr(description, "workflow_type", None),
+        "task_queue": getattr(description, "task_queue", None),
+        "start_time": getattr(description, "start_time", None),
+        "close_time": getattr(description, "close_time", None),
+    }
+    if status == "COMPLETED":
+        result = await handle.result()
+        response["result"] = {key: result.get(key) for key in (
+            "status", "temporal_outcome", "llm_calls", "rows_read", "rows_written", "error_code"
+        )}
+    return response
+
+
+def describe_workflow(*, workflow_id: str, address: str = TEMPORAL_ADDRESS, namespace: str = TEMPORAL_NAMESPACE) -> dict[str, Any]:
+    """Return a safe aggregate description for a Temporal workflow."""
+    return asyncio.run(_describe_workflow(workflow_id=workflow_id, address=address, namespace=namespace))
+
+
 def start_cli_run(
     *,
     workspace: str | Path,

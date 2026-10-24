@@ -7,7 +7,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .core import MoltError, load_json, validate_recipe
+from .core import MoltError, check_profile_contract, load_json, validate_recipe
 from .privacy import safe_profile_context
 
 
@@ -107,6 +107,19 @@ def _read_bounded(response: Any, maximum: int) -> bytes:
     return data
 
 
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON field")
+        result[key] = value
+    return result
+
+
+def _reject_constant(value: str) -> None:
+    raise ValueError("Non-finite JSON number")
+
+
 def ollama_tags(endpoint: str, *, timeout: float = 5.0, max_response_bytes: int = 256 * 1024) -> dict[str, Any]:
     request = Request(f"{endpoint.rstrip('/')}/api/tags", method="GET")
     try:
@@ -194,14 +207,17 @@ def generate_recipe(
 
     if not isinstance(response_data, dict) or response_data.get("error"):
         raise MoltError("MODEL_RESPONSE_INVALID", "Ollama returned an error or invalid response envelope.")
+    if response_data.get("done") is False or response_data.get("done_reason") == "length":
+        raise MoltError("MODEL_RESPONSE_INVALID", "Ollama returned an incomplete recipe response.")
     raw_recipe = response_data.get("response")
     if not isinstance(raw_recipe, str) or not raw_recipe.strip():
         raise MoltError("MODEL_RESPONSE_INVALID", "Ollama response did not contain recipe JSON.")
     try:
-        candidate = json.loads(raw_recipe)
-    except json.JSONDecodeError as exc:
+        candidate = json.loads(raw_recipe, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    except (ValueError, RecursionError) as exc:
         raise MoltError("MODEL_RESPONSE_INVALID", "Ollama recipe content was not valid JSON.") from exc
     candidate = validate_recipe(candidate)
+    check_profile_contract(candidate, profile)
     return candidate, {
         "provider": "ollama",
         "model": response_data.get("model", model),
@@ -209,6 +225,11 @@ def generate_recipe(
         "llm_calls": 1,
         "prompt_tokens": response_data.get("prompt_eval_count"),
         "response_tokens": response_data.get("eval_count"),
+        "validation_gate": {
+            "response_envelope": "PASS",
+            "recipe_schema": "PASS",
+            "profile_contract": "PASS",
+        },
     }
 
 

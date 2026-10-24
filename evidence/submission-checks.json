@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-24T11:00:50.028924+00:00",
+  "recorded_at": "2026-10-24T13:58:49.982327+00:00",
   "offline_demo": {
     "status": "PASS",
     "env_file": "absent",
@@ -19,7 +19,7 @@
     "missing": []
   },
   "pipeline_svg": "XML parsed",
-  "evidence_json_files_parsed": 19,
+  "evidence_json_files_parsed": 21,
   "tags_present": true,
   "not_checked": [
     "external links on publication site",

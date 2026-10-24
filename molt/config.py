@@ -28,6 +28,10 @@ class MoltConfig:
     tabpfn_model: str = "default"
     tabpfn_device: str = "auto"
     tabpfn_max_rows: int = 5_000
+    temporal_address: str = "127.0.0.1:7233"
+    temporal_namespace: str = "default"
+    temporal_task_queue: str = "molt"
+    temporal_activity_timeout_seconds: int = 300
 
     @property
     def database(self) -> Path:
@@ -75,6 +79,7 @@ class MoltConfig:
             "local_only": self.local_only, "sentry_configured": bool(self.sentry_dsn),
             "tabpfn_enabled": self.tabpfn_enabled, "tabpfn_license_accepted": self.tabpfn_license_accepted,
             "tabpfn_model": self.tabpfn_model, "tabpfn_device": self.tabpfn_device, "tabpfn_max_rows": self.tabpfn_max_rows,
+            "temporal": {"address": self.temporal_address, "namespace": self.temporal_namespace, "task_queue": self.temporal_task_queue, "activity_timeout_seconds": self.temporal_activity_timeout_seconds},
         }
 
 
@@ -138,4 +143,8 @@ def config_from_workspace(path: str | Path | None = None) -> MoltConfig:
         tabpfn_model=_value("MOLT_TABPFN_MODEL", values, "default"),
         tabpfn_device=_value("MOLT_TABPFN_DEVICE", values, "auto"),
         tabpfn_max_rows=_int("MOLT_TABPFN_MAX_ROWS", values, 5_000),
+        temporal_address=_value("MOLT_TEMPORAL_ADDRESS", values, "127.0.0.1:7233"),
+        temporal_namespace=_value("MOLT_TEMPORAL_NAMESPACE", values, "default"),
+        temporal_task_queue=_value("MOLT_TEMPORAL_TASK_QUEUE", values, "molt"),
+        temporal_activity_timeout_seconds=_int("MOLT_TEMPORAL_ACTIVITY_TIMEOUT_SECONDS", values, 300),
     )

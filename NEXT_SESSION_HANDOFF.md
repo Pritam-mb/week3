@@ -1,5 +1,42 @@
 # Molt — Next Session Handoff
 
+## Current stop point — 2026-10-24, Slow and steady final pass
+
+This section supersedes the older build priorities below. The user asked to
+finish local Temporal evidence and a bounded Gemma validation improvement, then
+stop feature work and move to the post. That is the current scope boundary.
+
+- Real local chaos run: two worker SIGKILLs, one persistent Temporal server
+  SIGKILL/restart, recovery on activity attempt 3, two compatible outputs matching
+  independent fixtures, one drift quarantine without retry, and idempotent replay
+  without output replacement. `evidence/temporal-chaos.json` is COMPLETE.
+- Added atomic checkpoint metadata and no-replace service output publication,
+  including reconciliation after publication/before run-record commit.
+- Dashboard now polls durable-run status, remembers the latest workflow ID, and
+  distinguishes Temporal COMPLETED from Molt BLOCKED_DRIFT. Status responses
+  expose aggregate result fields only.
+- Gemma response/recipe/profile guards reject malformed nested fields, ambiguous
+  JSON, incomplete output, and incompatible input contracts. Existing fixture
+  verification and explicit approval remain mandatory. Retry summaries are
+  code/count-only; permanent setup errors stop early.
+- No live Gemma trials were repeated. Full-task **0/5**, TabPFN **72.22% recall**,
+  original verifier **18/20**, and same-mutation **20/20** remain visible.
+- Fixed the earlier evidence script's hand-written Temporal event-name mapping;
+  actual protobuf enums and the final activity's attempt number now supply the
+  reported retry evidence. Reran the script successfully; it still proves two
+  attempts, not worker-process death.
+- `python -m pytest -q`: 78 passed, 20 subtests passed, one existing `cgi`
+  deprecation warning. `node --test tests/test_dashboard.cjs`: 3 passed.
+- Historical verifier snapshot check differs only in source hashes. Preserved it
+  and saved `evidence/verifier-final-guardrails.json`; its explicit `--check`
+  passes with unchanged mutation outcomes. Benchmark still matches both oracles.
+
+Read `evidence/SLOW_AND_STEADY_HANDOFF.md` for the post-ready technical summary.
+Next: review/update `POST_DRAFT.md`, not new features or sponsor additions.
+Security review, screenshot reconciliation/capture, fresh-clone verification,
+outside-reader review and publication preview are still separate open tasks.
+No commit, push, Cloud account, paid service or publication was performed.
+
 **Date:** 2026-10-22
 **Workspace:** `D:\week3`
 **Primary brief read today:** `final.txt`

@@ -10,6 +10,12 @@
     repairs: [],
     selected: null,
     loading: false,
+    temporalRun: null,
+    temporalPolls: 0,
+    temporalPolling: false,
+    temporalTimer: null,
+    builder: { sourcePath: "", profile: null, busy: false },
+    selectedRun: null,
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -99,6 +105,12 @@
       ver: run.recipe_version_id || run.version_id || run.recipe_version,
       ms: run.duration_ms ?? run.latency_ms,
       at: run.started_at || run.created_at,
+      input: run.input,
+      output: run.output,
+      errorCode: run.error_code,
+      errorMessage: run.error_message,
+      errorDetails: run.error_details || {},
+      quarantine: run.quarantine_artifact_id || run.quarantine,
     };
   }
 
@@ -115,6 +127,7 @@
       ver: item.active_version?.version_number || item.active_version_id || "—",
       description: L(item.description, "A local verified automation thread."),
       status: L(item.status, "DRAFT"),
+      inputReference: item.input_reference || "",
     }));
     const selected = autos.find((item) => String(item.id) === String(state.selected)) || autos[0] || null;
     let detail = selected ? await request(`/automations/${encodeURIComponent(selected.id)}`) : {};
@@ -131,6 +144,7 @@
     state.runs = list(detail.runs).map(mapRun).sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
     state.versions = list(detail.versions).map(mapVersion);
     state.repairs = list(detail.repair_proposals);
+    state.builder.sourcePath = state.builder.sourcePath || selected?.inputReference || "";
     return { selected, detail };
   }
 
@@ -148,7 +162,7 @@
     const healthChip = $("#health-chip");
     healthChip.className = `status-chip ${online ? "online" : "offline"}`;
     healthChip.innerHTML = `<span class="status-dot"></span>${online ? "API online" : "API unavailable"}`;
-    const model = health.ollama?.status || health.ollama?.configured ? "Model ready" : "Model idle";
+    const model = health.ollama?.status === "ready" ? "Model ready" : "Model unavailable";
     $("#model-chip").innerHTML = `<span class="status-dot"></span>${escapeHTML(model)}`;
     $("#source-dot").className = `live-dot ${online ? "online" : "offline"}`;
     $("#source-note").textContent = online ? "Live from the local API" : "Local API unavailable";
@@ -157,6 +171,51 @@
     $("#automation-count").textContent = String(state.autos.length);
     $("#sync-label").textContent = `Synced ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
     $("#api-note").textContent = online ? "Live from the local API" : "Waiting for the local API";
+    const temporalReady = Boolean(selected?.id && state.config?.temporal && state.versions.some((version) => version.rawStatus === "ACTIVE"));
+    $("#temporal-run-button").disabled = !temporalReady;
+    renderTemporalStatus();
+  }
+
+  function selectedAutomation() {
+    return state.autos.find((auto) => String(auto.id) === String(state.selected)) || null;
+  }
+
+  function builderValue(id) {
+    return $(`#${id}`)?.value?.trim() || "";
+  }
+
+  function setBuilderStatus(message, kind = "") {
+    const target = $("#builder-status");
+    if (!target) return;
+    target.className = `builder-status ${kind}`;
+    target.textContent = message;
+  }
+
+  function renderBuilder() {
+    const selected = selectedAutomation();
+    const source = state.builder.sourcePath || selected?.inputReference || "";
+    const hasAutomation = Boolean(selected);
+    const hasSource = Boolean(source);
+    const hasProfile = Boolean(state.builder.profile);
+    const pathInput = $("#builder-path");
+    if (pathInput && document.activeElement !== pathInput) pathInput.value = source;
+    const profileButton = $("#profile-input-button");
+    const compileButton = $("#compile-recipe-button");
+    const stage = $("#builder-stage");
+    if (profileButton) profileButton.disabled = !hasAutomation || !hasSource || state.builder.busy;
+    if (compileButton) compileButton.disabled = !hasAutomation || !hasSource || state.builder.busy;
+    if (stage) stage.textContent = !hasAutomation ? "Step 1 of 4" : !hasProfile ? "Step 2 of 4" : state.versions.some((version) => version.state === "candidate") ? "Step 4 of 4" : "Step 3 of 4";
+    const profile = $("#profile-summary");
+    if (profile) {
+      profile.hidden = !state.builder.profile;
+      if (state.builder.profile) {
+        const columns = state.builder.profile.columns || [];
+        profile.innerHTML = `<strong>Profile ready</strong> · ${number(state.builder.profile.row_count)} rows · ${columns.length} columns · ${escapeHTML(columns.join(", "))}`;
+      }
+    }
+    const sourceMode = $("#builder-source")?.value || "gemma";
+    const modelField = $("#builder-model-field");
+    if (modelField) modelField.style.display = sourceMode === "gemma" ? "grid" : "none";
   }
 
   function renderRail() {
@@ -190,6 +249,50 @@
     $("#thread-explanation").textContent = "Select a bead to inspect its role.";
   }
 
+  function renderJourney(selected) {
+    const active = state.versions.some((version) => version.state === "active");
+    const candidate = state.versions.some((version) => version.state === "candidate");
+    const blocked = state.runs.some((run) => run.status === "BLOCKED_DRIFT");
+    const latest = state.runs[0];
+    const steps = [
+      ["01", "Profile input", "Schema + masked samples", true],
+      ["02", "Compile recipe", "Gemma proposes JSON", candidate || active],
+      ["03", "Verify + approve", candidate ? "Candidate needs review" : active ? "Active version" : "Tests decide", active ? true : candidate],
+      ["04", "Run deterministically", latest ? `${latest.calls} model calls` : "Zero calls after approval", latest?.status === "SUCCEEDED" || active],
+      ["05", blocked ? "Drift blocked" : "Repair if needed", blocked ? "Quarantine; never guess" : "Only after a mismatch", blocked ? "blocked" : true],
+    ];
+    $("#journey-graph").innerHTML = steps.map(([numberValue, title, detail, tone]) => `<div class="journey-step ${tone === "blocked" ? "blocked" : tone ? "active" : ""}"><span class="journey-icon">${tone === "blocked" ? "×" : tone ? "✓" : numberValue}</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(detail)}</small></div>`).join("");
+    $("#journey-caption").textContent = selected ? `${selected.name} · ${blocked ? "latest file was blocked" : active ? "approved recipe ready" : "start by creating a recipe"}` : "Create an automation to begin";
+  }
+
+  function safeFileName(value) {
+    return L(value, "workspace file").split(/[\\/]/).pop();
+  }
+
+  function detailList(value) {
+    if (!Array.isArray(value) || !value.length) return "";
+    return `<ul class="inspector-list">${value.slice(0, 12).map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
+  }
+
+  function renderRunInspector() {
+    const panel = $("#run-inspector");
+    if (!panel) return;
+    const run = state.runs.find((item) => String(item.id) === String(state.selectedRun));
+    if (!run) { panel.hidden = true; panel.innerHTML = ""; return; }
+    panel.hidden = false;
+    const blocked = run.status === "BLOCKED_DRIFT";
+    const details = run.errorDetails || {};
+    const structural = [
+      details.missing ? `<strong>Missing columns:</strong>${detailList(details.missing)}` : "",
+      details.extra ? `<strong>Unexpected columns:</strong>${detailList(details.extra)}` : "",
+      details.expected ? `<strong>Expected contract:</strong>${detailList(details.expected)}` : "",
+      details.observed ? `<strong>Observed structure:</strong>${detailList(details.observed)}` : "",
+      details.column ? `<strong>Affected column:</strong> ${escapeHTML(details.column)}` : "",
+      details.unmapped_count ? `<strong>Unmapped rows:</strong> ${escapeHTML(details.unmapped_count)}` : "",
+    ].filter(Boolean).join("");
+    panel.innerHTML = `<div class="inspector-top"><div><h3 class="inspector-title">${blocked ? "Why Molt blocked this file" : "What Molt did with this file"}</h3><p class="inspector-subtitle">${escapeHTML(safeFileName(run.input))} · ${formatDate(run.at)}</p></div><span class="run-status ${blocked ? "blocked" : "success"}">${escapeHTML(run.status.replace(/_/g, " "))}</span></div><div class="inspector-grid"><div class="inspector-stat"><strong>${escapeHTML(run.errorCode || (run.status === "SUCCEEDED" ? "RECIPE_APPLIED" : "RUN_RESULT"))}</strong><span>decision</span></div><div class="inspector-stat"><strong>${run.rows} rows</strong><span>rows written / observed</span></div><div class="inspector-stat"><strong>${run.calls} model calls</strong><span>at execution time</span></div></div><div class="inspector-details">${blocked ? `<p><strong>Molt did not guess.</strong> The input no longer satisfied the approved recipe contract, so no output was written and the file was quarantined for review.</p><p>${escapeHTML(run.errorMessage || "The file was rejected by the deterministic guard.")}</p>${structural}` : `<p><strong>Compatible input.</strong> The stored approved recipe ran deterministically. The model was not called again.</p><p>Output: <code>${escapeHTML(safeFileName(run.output))}</code></p>`}</div>`;
+  }
+
   function renderChart() {
     const runs = state.runs.slice(0, 10).reverse();
     const width = 640; const height = 170; const pad = 24;
@@ -218,12 +321,12 @@
   }
 
   function renderRuns() {
-    $("#runs-body").innerHTML = state.runs.length ? state.runs.map((run) => `<tr class="${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}"><td><span class="run-name">${escapeHTML(shortId(run.id))}</span><br><small>${formatDate(run.at)}</small></td><td><span class="run-status ${run.status === "BLOCKED_DRIFT" ? "blocked" : status(run.status) === "success" ? "success" : ""}">${escapeHTML(run.status.replace(/_/g, " "))}</span></td><td>${run.rows}</td><td>${run.calls}</td><td>${escapeHTML(shortId(run.ver))}</td><td>${formatMs(run.ms)}</td></tr>`).join("") : `<tr><td class="empty-row" colspan="6">No runs returned by the local API.</td></tr>`;
+    $("#runs-body").innerHTML = state.runs.length ? state.runs.map((run) => `<tr class="${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}" data-run-id="${escapeHTML(run.id)}" tabindex="0" title="Select to inspect this run"><td><span class="run-name">${escapeHTML(shortId(run.id))}</span><br><small>${formatDate(run.at)}</small></td><td><span class="run-status ${run.status === "BLOCKED_DRIFT" ? "blocked" : status(run.status) === "success" ? "success" : ""}">${escapeHTML(run.status.replace(/_/g, " "))}</span></td><td>${run.rows}</td><td>${run.calls}</td><td>${escapeHTML(shortId(run.ver))}</td><td>${formatMs(run.ms)}</td></tr>`).join("") : `<tr><td class="empty-row" colspan="6">No runs returned by the local API.</td></tr>`;
   }
 
   function render() {
     const selected = state.autos.find((auto) => String(auto.id) === String(state.selected));
-    renderTop(selected); renderRail(); renderMetric(); renderThread(); renderChart(); renderVersions(); renderRuns();
+    renderTop(selected); renderRail(); renderBuilder(); renderMetric(); renderThread(); renderJourney(selected); renderChart(); renderVersions(); renderRuns(); renderRunInspector();
   }
 
   async function load() {
@@ -240,6 +343,160 @@
     try { await post(route); showToast(`${operation === "verify" ? "Verification" : "Approval"} completed.`); await load(); } catch (error) { showToast(error.message, "error"); }
   }
 
+  async function uploadBuilderInput() {
+    const file = $("#builder-file")?.files?.[0];
+    if (!file) return builderValue("builder-path");
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(api("/files/profile"), { method: "POST", body: formData });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error?.message || "CSV upload failed");
+    state.builder.sourcePath = payload.path;
+    state.builder.profile = payload.profile;
+    return payload.path;
+  }
+
+  async function createAutomationFromBuilder() {
+    if (state.builder.busy) return;
+    const name = builderValue("builder-name");
+    const task = builderValue("builder-task");
+    const typedPath = builderValue("builder-path");
+    if (!name || !task) { setBuilderStatus("Enter a workflow name and task first.", "warn"); return; }
+    state.builder.busy = true; renderBuilder(); setBuilderStatus("Uploading and creating the workflow…");
+    try {
+      const sourcePath = (await uploadBuilderInput()) || typedPath;
+      if (!sourcePath) throw new Error("Choose a CSV file or enter a workspace CSV path.");
+      const created = await post("/automations", { name, description: task, input_reference: sourcePath });
+      state.selected = created.id;
+      state.builder.sourcePath = sourcePath;
+      state.builder.profile = null;
+      setBuilderStatus(`Created ${created.name}. Next, profile the input, then compile a recipe.`, "success");
+      await load();
+    } catch (error) { setBuilderStatus(error.message, "error"); showToast(error.message, "error"); }
+    finally { state.builder.busy = false; renderBuilder(); }
+  }
+
+  async function profileBuilderInput() {
+    const selected = selectedAutomation();
+    const sourcePath = state.builder.sourcePath || builderValue("builder-path");
+    if (!selected || !sourcePath) { setBuilderStatus("Create a workflow and choose its CSV first.", "warn"); return; }
+    state.builder.busy = true; renderBuilder(); setBuilderStatus("Profiling the CSV without sending raw rows to the model…");
+    try {
+      const result = await post(`/automations/${encodeURIComponent(selected.id)}/profile`, { input_reference: sourcePath });
+      state.builder.sourcePath = sourcePath; state.builder.profile = result;
+      setBuilderStatus("Profile complete. The next step is compiling a constrained recipe.", "success");
+    } catch (error) { setBuilderStatus(error.message, "error"); showToast(error.message, "error"); }
+    finally { state.builder.busy = false; renderBuilder(); }
+  }
+
+  async function compileBuilderRecipe() {
+    const selected = selectedAutomation();
+    const sourcePath = state.builder.sourcePath || builderValue("builder-path");
+    const task = builderValue("builder-task") || selected?.description;
+    if (!selected || !sourcePath || !task) { setBuilderStatus("Create the workflow, choose a CSV, and enter a task first.", "warn"); return; }
+    state.builder.busy = true; renderBuilder();
+    const source = $("#builder-source")?.value || "gemma";
+    setBuilderStatus(source === "gemma" ? "Gemma is proposing a recipe. Molt will validate and test it before approval…" : "Loading the checked recipe. You still must run tests and approve it…");
+    try {
+      const body = { input_reference: sourcePath, task };
+      if (source === "gemma") body.model = builderValue("builder-model") || "gemma3:4b";
+      else body.recipe_file = "examples/recipes/expense-v1.json";
+      const candidate = await post(`/automations/${encodeURIComponent(selected.id)}/compile`, body);
+      setBuilderStatus(`Candidate ${shortId(candidate.id)} created. Review its checks below; approval is still explicit.`, candidate.status === "AWAITING_APPROVAL" ? "success" : "warn");
+      await load();
+    } catch (error) { setBuilderStatus(error.message, "error"); showToast(error.message, "error"); }
+    finally { state.builder.busy = false; renderBuilder(); }
+  }
+
+  async function startTemporalRun() {
+    const selected = state.autos.find((auto) => String(auto.id) === String(state.selected));
+    if (!selected) return;
+    const input = window.prompt("Workspace CSV reference for the durable run", "in/input.csv");
+    if (!input) return;
+    try {
+      const result = await post(`/automations/${encodeURIComponent(selected.id)}/temporal-runs`, {
+        input_reference: input,
+        wait: false,
+      });
+      state.temporalRun = { workflow_id: result.workflow_id, automation_id: selected.id, status: "RUNNING" };
+      localStorage.setItem("molt-temporal-run", JSON.stringify(state.temporalRun));
+      state.temporalPolls = 0;
+      renderTemporalStatus();
+      pollTemporalRun();
+      showToast(`Temporal workflow started: ${shortId(result.workflow_id)}`);
+    } catch (error) { showToast(error.message, "error"); }
+  }
+
+  function renderTemporalStatus() {
+    const run = state.temporalRun;
+    if (!run) return;
+    const outcome = run.result?.status;
+    $("#temporal-status").textContent = `Durable run ${shortId(run.workflow_id)}: ${run.status}${outcome ? ` · Molt ${outcome}` : ""}${run.notice ? ` · ${run.notice}` : ""}`;
+  }
+
+  async function pollTemporalRun() {
+    if (!state.temporalRun || state.temporalPolling) return;
+    window.clearTimeout(state.temporalTimer);
+    state.temporalPolling = true;
+    const run = state.temporalRun;
+    try {
+      const result = await request(`/temporal-runs/${encodeURIComponent(run.workflow_id)}`);
+      if (run !== state.temporalRun) return;
+      const changed = run.status !== result.status;
+      Object.assign(run, result, { notice: "" });
+      if (changed && result.status !== "RUNNING") await load();
+    } catch (_) {
+      run.notice = "Status unavailable; retrying. This does not mean the workflow failed.";
+    } finally {
+      state.temporalPolling = false;
+      state.temporalPolls += 1;
+      if ((state.temporalRun?.status === "RUNNING" || state.temporalRun?.notice) && state.temporalPolls < 100) {
+        state.temporalTimer = window.setTimeout(pollTemporalRun, 3000);
+      } else if (state.temporalPolls >= 100) {
+        state.temporalRun.notice = "Automatic checks paused. Refresh to check again.";
+      }
+      renderTemporalStatus();
+    }
+  }
+
+  async function runCsv(pathOrFile) {
+    const selected = state.autos.find((auto) => String(auto.id) === String(state.selected));
+    if (!selected) { showToast("No automation selected", "warn"); return; }
+    const resultBox = $("#run-result-box");
+    if (resultBox) {
+      resultBox.style.display = "block";
+      resultBox.className = "run-result-box";
+      resultBox.innerHTML = "Running active recipe on CSV...";
+    }
+    try {
+      let targetPath = pathOrFile;
+      if (typeof pathOrFile !== "string" && pathOrFile && typeof pathOrFile === "object" && "name" in pathOrFile) {
+        const formData = new FormData();
+        formData.append("file", pathOrFile);
+        const uploadRes = await fetch(api("/files/profile"), { method: "POST", body: formData });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData?.error?.message || "Upload failed");
+        targetPath = uploadData.path;
+      }
+      const record = await post(`/automations/${encodeURIComponent(selected.id)}/runs`, { path: targetPath });
+      const succeeded = record.status === "SUCCEEDED";
+      if (resultBox) {
+        resultBox.className = `run-result-box ${succeeded ? "success" : "drift"}`;
+        resultBox.innerHTML = succeeded
+          ? `<strong>✓ Run Succeeded!</strong><br>Processed ${record.rows_read} rows in ${record.duration_ms} ms with <strong>0 model calls</strong>.<br><small>Output written to: ${escapeHTML(shortId(record.output))}</small>`
+          : `<strong>⚠ Drift Blocked & Quarantined!</strong><br>Code: <code>${escapeHTML(record.error_code)}</code> — ${escapeHTML(record.error_message)}<br><small>Zero outputs written. Quarantined for review.</small>`;
+      }
+      showToast(succeeded ? "Run succeeded (0 model calls)" : "Drift blocked and quarantined", succeeded ? "ok" : "warn");
+      await load();
+    } catch (err) {
+      if (resultBox) {
+        resultBox.className = "run-result-box drift";
+        resultBox.innerHTML = `<strong>Execution error:</strong> ${escapeHTML(err.message)}`;
+      }
+      showToast(err.message, "error");
+    }
+  }
+
   function setTheme(theme) {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("molt-theme", theme);
@@ -249,15 +506,56 @@
   document.addEventListener("click", (event) => {
     const auto = event.target.closest("[data-auto-id]");
     if (auto) { state.selected = auto.dataset.autoId; load(); return; }
+    const runRow = event.target.closest("[data-run-id]");
+    if (runRow) { state.selectedRun = runRow.dataset.runId; renderRunInspector(); window.location.href = `/diff.html?run=${encodeURIComponent(state.selectedRun)}`; return; }
     const actionButton = event.target.closest("[data-action]");
     if (actionButton) { action(actionButton); return; }
+    const chip = event.target.closest("[data-run-path]");
+    if (chip) { runCsv(chip.dataset.runPath); return; }
     const nodeButton = event.target.closest(".node");
     if (nodeButton) { $("#thread-explanation").innerHTML = `<strong>${escapeHTML(nodeButton.textContent)}</strong> — ${escapeHTML(nodeButton.dataset.explanation)}`; return; }
-    if (event.target.closest("#refresh-button")) load();
+    if (event.target.closest("#refresh-button")) { load(); state.temporalPolls = 0; pollTemporalRun(); }
+    if (event.target.closest("#run-csv-button") || event.target.closest("#csv-dropzone")) {
+      const picker = $("#csv-file-picker");
+      if (picker && typeof picker.click === "function") picker.click();
+      return;
+    }
+    if (event.target.closest("#temporal-run-button")) return startTemporalRun();
+    if (event.target.closest("#create-automation-button")) return createAutomationFromBuilder();
+    if (event.target.closest("#profile-input-button")) return profileBuilderInput();
+    if (event.target.closest("#compile-recipe-button")) return compileBuilderRecipe();
     if (event.target.closest("#theme-button")) setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
   });
 
+  const filePicker = $("#csv-file-picker");
+  filePicker?.addEventListener?.("change", (e) => {
+    const file = e.target?.files?.[0];
+    if (file) runCsv(file);
+    if (filePicker) filePicker.value = "";
+  });
+
+  const dropzone = $("#csv-dropzone");
+  dropzone?.addEventListener?.("dragover", (e) => { e.preventDefault?.(); dropzone.classList?.add("dragover"); });
+  dropzone?.addEventListener?.("dragleave", () => dropzone.classList?.remove("dragover"));
+  dropzone?.addEventListener?.("drop", (e) => {
+    e.preventDefault?.();
+    dropzone.classList?.remove("dragover");
+    const file = e.dataTransfer?.files?.[0];
+    if (file) runCsv(file);
+  });
+
+  $("#builder-source")?.addEventListener?.("change", renderBuilder);
+  $("#builder-file")?.addEventListener?.("change", (event) => {
+    const file = event.target?.files?.[0];
+    if (file) { $("#builder-path").value = `upload: ${file.name}`; setBuilderStatus(`${file.name} is ready to upload when you create the workflow.`); }
+  });
+
   const preferred = localStorage.getItem("molt-theme");
+  try {
+    const remembered = JSON.parse(localStorage.getItem("molt-temporal-run"));
+    if (typeof remembered?.workflow_id === "string") state.temporalRun = remembered;
+  } catch (_) { /* An invalid local preference must not prevent dashboard startup. */ }
   setTheme(preferred || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
   load();
+  pollTemporalRun();
 }());

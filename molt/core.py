@@ -81,7 +81,16 @@ def load_json(path: Path) -> Any:
 
 def save_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
 
 
 def normalize_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
@@ -94,6 +103,12 @@ def normalize_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _column_names(value: Any) -> bool:
+    return (isinstance(value, list) and bool(value)
+            and all(isinstance(item, str) and bool(item) for item in value)
+            and len(set(value)) == len(value))
+
+
 def validate_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     """Validate the closed recipe language before any input is touched."""
     recipe = normalize_recipe(recipe)
@@ -101,8 +116,9 @@ def validate_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     required = {"schema_version", "name", "description", "input_contract", "operations", "output_contract"}
     _require(not (set(recipe) - required - {"verification_policy", "limits"}), "RECIPE_SCHEMA_INVALID", "Recipe contains unsupported top-level fields.")
     _require(required <= recipe.keys(), "RECIPE_SCHEMA_INVALID", "Recipe is missing required fields.")
-    _require(recipe["schema_version"] == 1, "RECIPE_SCHEMA_INVALID", "Only schema version 1 is supported.")
+    _require(type(recipe["schema_version"]) is int and recipe["schema_version"] == 1, "RECIPE_SCHEMA_INVALID", "Only schema version 1 is supported.")
     _require(isinstance(recipe["name"], str) and recipe["name"].strip(), "RECIPE_SCHEMA_INVALID", "Recipe name must be non-empty.")
+    _require(isinstance(recipe["description"], str), "RECIPE_SCHEMA_INVALID", "Recipe description must be a string.")
     _require(isinstance(recipe["operations"], list) and 0 < len(recipe["operations"]) <= 30, "RECIPE_SCHEMA_INVALID", "Recipe must contain 1-30 operations.")
 
     contract = recipe["input_contract"]
@@ -110,15 +126,17 @@ def validate_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     _require(isinstance(contract, dict), "RECIPE_SCHEMA_INVALID", "input_contract must be an object.")
     _require(isinstance(output, dict), "RECIPE_SCHEMA_INVALID", "output_contract must be an object.")
     required_columns = contract.get("required_columns")
-    _require(isinstance(required_columns, list) and all(isinstance(c, str) and c for c in required_columns), "RECIPE_SCHEMA_INVALID", "required_columns must be a list of names.")
-    _require(isinstance(output.get("required_columns"), list), "RECIPE_SCHEMA_INVALID", "output_contract.required_columns must be a list.")
+    _require(_column_names(required_columns), "RECIPE_SCHEMA_INVALID", "required_columns must contain unique non-empty names.")
+    _require(_column_names(output.get("required_columns")), "RECIPE_SCHEMA_INVALID", "output_contract.required_columns must contain unique non-empty names.")
+    if "allow_extra_columns" in contract:
+        _require(type(contract["allow_extra_columns"]) is bool, "RECIPE_SCHEMA_INVALID", "allow_extra_columns must be boolean.")
     _require(output.get("preserve_extra_columns") is True, "RECIPE_SCHEMA_INVALID", "The MVP requires preserving extra columns.")
 
     available_columns = list(required_columns)
     for index, operation in enumerate(recipe["operations"]):
         _require(isinstance(operation, dict), "RECIPE_SCHEMA_INVALID", f"Operation {index + 1} must be an object.")
         op_type = operation.get("type")
-        _require(op_type in SUPPORTED_OPERATIONS, "UNSUPPORTED_OPERATION", f"Unsupported operation: {op_type!r}.", operation=index + 1)
+        _require(isinstance(op_type, str) and op_type in SUPPORTED_OPERATIONS, "UNSUPPORTED_OPERATION", "Operation is outside the supported allowlist.", operation=index + 1)
         unknown = set(operation) - OPERATION_FIELDS[op_type]
         _require(not unknown, "RECIPE_SCHEMA_INVALID", f"Operation {op_type} has unsupported arguments: {sorted(unknown)}.")
         _validate_operation(operation, available_columns)
@@ -137,6 +155,12 @@ def validate_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
 
 def _validate_operation(operation: dict[str, Any], required_columns: list[str]) -> None:
     op_type = operation["type"]
+    for field in ("columns", "key_columns", "output_columns"):
+        if field in operation:
+            _require(_column_names(operation[field]), "RECIPE_SCHEMA_INVALID", f"{field} must contain unique non-empty names.")
+    for field in ("mode", "on_error", "on_unmapped", "keep", "on_missing", "on_no_match", "decimal_separator"):
+        if field in operation:
+            _require(isinstance(operation[field], str), "RECIPE_SCHEMA_INVALID", f"{field} must be a string.")
     if op_type == "rename_column":
         _require(isinstance(operation.get("source"), str) and operation["source"] in required_columns, "RECIPE_SCHEMA_INVALID", "rename_column.source must be a required column.")
         _require(isinstance(operation.get("destination"), str) and operation["destination"] not in required_columns, "RECIPE_SCHEMA_INVALID", "rename_column.destination must be a new column.")
@@ -148,7 +172,8 @@ def _validate_operation(operation: dict[str, Any], required_columns: list[str]) 
             _require(operation.get("mode") in {"lower", "upper", "title"}, "RECIPE_SCHEMA_INVALID", "normalize_case.mode must be lower, upper, or title.")
     elif op_type == "split_column":
         _require(operation.get("column") in required_columns, "RECIPE_SCHEMA_INVALID", "split_column.column must be a required column.")
-        _require(isinstance(operation.get("delimiter"), str), "RECIPE_SCHEMA_INVALID", "split_column.delimiter is required.")
+        _require(isinstance(operation.get("delimiter"), str) and bool(operation["delimiter"]), "RECIPE_SCHEMA_INVALID", "split_column.delimiter must be non-empty.")
+        _require(not any(column in required_columns for column in operation.get("output_columns", [])), "RECIPE_SCHEMA_INVALID", "split_column must not overwrite existing columns.")
         _require(isinstance(operation.get("output_columns"), list) and operation["output_columns"], "RECIPE_SCHEMA_INVALID", "split_column.output_columns is required.")
         _require(operation.get("on_missing") in {"fail", "fill_empty"}, "RECIPE_SCHEMA_INVALID", "split_column.on_missing must be fail or fill_empty.")
     elif op_type == "coerce_date":
@@ -162,7 +187,7 @@ def _validate_operation(operation: dict[str, Any], required_columns: list[str]) 
         _require(operation.get("decimal_separator") in {".", ","}, "RECIPE_SCHEMA_INVALID", "decimal_separator must be '.' or ','.")
         _require(isinstance(operation.get("thousands_separator"), str), "RECIPE_SCHEMA_INVALID", "thousands_separator is required.")
         if "decimal_places" in operation:
-            _require(isinstance(operation["decimal_places"], int) and 0 <= operation["decimal_places"] <= 6, "RECIPE_SCHEMA_INVALID", "decimal_places must be an integer from 0 to 6.")
+            _require(type(operation["decimal_places"]) is int and 0 <= operation["decimal_places"] <= 6, "RECIPE_SCHEMA_INVALID", "decimal_places must be an integer from 0 to 6.")
     elif op_type == "map_values":
         _require(isinstance(operation.get("column"), str) and operation["column"] in required_columns, "RECIPE_SCHEMA_INVALID", "map_values.column must be a required column.")
         _require(isinstance(operation.get("mapping"), dict), "RECIPE_SCHEMA_INVALID", "map_values.mapping is required.")
@@ -177,20 +202,34 @@ def _validate_operation(operation: dict[str, Any], required_columns: list[str]) 
         _require(isinstance(operation.get("columns"), list) and operation["columns"], "RECIPE_SCHEMA_INVALID", f"{op_type}.columns is required.")
         _require(set(operation["columns"]) <= set(required_columns), "RECIPE_SCHEMA_INVALID", f"{op_type} references an undeclared column.")
         if op_type == "reorder_columns":
-            _require(operation.get("preserve_extra_columns") in {True, False}, "RECIPE_SCHEMA_INVALID", "reorder_columns.preserve_extra_columns is required.")
+            _require(type(operation.get("preserve_extra_columns")) is bool, "RECIPE_SCHEMA_INVALID", "reorder_columns.preserve_extra_columns is required.")
         if op_type == "fill_null":
             _require("value" in operation and isinstance(operation["value"], str), "RECIPE_SCHEMA_INVALID", "fill_null.value is required.")
     elif op_type == "filter_rows":
         condition = operation.get("condition")
         _require(isinstance(condition, dict), "RECIPE_SCHEMA_INVALID", "filter_rows.condition must be a declarative object.")
         _require(condition.get("column") in required_columns, "RECIPE_SCHEMA_INVALID", "filter_rows.condition.column must be a required column.")
-        _require(condition.get("operator") in {"eq", "neq", "contains", "in", "gt", "gte", "lt", "lte"}, "RECIPE_SCHEMA_INVALID", "filter_rows uses an unsupported operator.")
+        _require(isinstance(condition.get("operator"), str) and condition["operator"] in {"eq", "neq", "contains", "in", "gt", "gte", "lt", "lte"}, "RECIPE_SCHEMA_INVALID", "filter_rows uses an unsupported operator.")
         _require("value" in condition, "RECIPE_SCHEMA_INVALID", "filter_rows.condition.value is required.")
+        if condition["operator"] == "in":
+            _require(isinstance(condition["value"], list) and all(isinstance(value, str) for value in condition["value"]), "RECIPE_SCHEMA_INVALID", "filter_rows in requires a list of strings.")
+        else:
+            _require(type(condition["value"]) in (str, int, float), "RECIPE_SCHEMA_INVALID", "filter_rows comparison requires a scalar value.")
         _require(operation.get("on_no_match") in {"keep_empty", "fail"}, "RECIPE_SCHEMA_INVALID", "filter_rows.on_no_match must be keep_empty or fail.")
     elif op_type == "validate_values":
         _require(operation.get("column") in required_columns, "RECIPE_SCHEMA_INVALID", "validate_values.column must be a required column.")
         _require(operation.get("on_error") == "fail", "RECIPE_SCHEMA_INVALID", "validate_values must fail on invalid values.")
         _require(any(key in operation for key in ("allowed_values", "min", "max")), "RECIPE_SCHEMA_INVALID", "validate_values needs a constraint.")
+        if "allowed_values" in operation:
+            values = operation["allowed_values"]
+            _require(isinstance(values, list) and bool(values) and all(isinstance(value, str) for value in values), "RECIPE_SCHEMA_INVALID", "allowed_values must be a non-empty list of strings.")
+        for field in ("min", "max"):
+            if field in operation:
+                try:
+                    number = Decimal(str(operation[field]))
+                except InvalidOperation as exc:
+                    raise MoltError("RECIPE_SCHEMA_INVALID", "Numeric constraints must be finite numbers.") from exc
+                _require(number.is_finite(), "RECIPE_SCHEMA_INVALID", "Numeric constraints must be finite numbers.")
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -279,6 +318,26 @@ def check_contract(recipe: dict[str, Any], headers: list[str]) -> None:
         extras = [column for column in headers if column not in required]
         if extras:
             raise MoltError("INPUT_TYPE_MISMATCH", f"Unexpected column(s): {', '.join(extras)}.", details={"extra": extras})
+
+
+def check_profile_contract(recipe: dict[str, Any], profile: dict[str, Any]) -> None:
+    """Reject a model recipe that cannot apply to the profiled input.
+
+    This is an early, value-free gate before a candidate is persisted or sent
+    through fixture execution. Runtime checks remain authoritative.
+    """
+    columns = profile.get("columns") if isinstance(profile, dict) else None
+    _require(_column_names(columns), "RECIPE_INPUT_CONTRACT_MISMATCH", "A valid input profile is required before accepting a model recipe.")
+    required = recipe["input_contract"]["required_columns"]
+    missing = [column for column in required if column not in columns]
+    if missing:
+        raise MoltError(
+            "RECIPE_INPUT_CONTRACT_MISMATCH",
+            "Recipe requires columns that are not present in the profiled input.",
+            details={"missing_count": len(missing), "required_count": len(required)},
+        )
+    if recipe["input_contract"].get("allow_extra_columns") is False and set(columns) - set(required):
+        raise MoltError("RECIPE_INPUT_CONTRACT_MISMATCH", "Recipe forbids extra columns present in the profiled input.")
 
 
 def _parse_date(value: str, formats: list[str], output_format: str) -> str:
@@ -501,7 +560,7 @@ def canonical_csv(headers: list[str], rows: list[dict[str, str]]) -> str:
     return buffer.getvalue()
 
 
-def write_csv_atomic(path: Path, headers: list[str], rows: list[dict[str, str]]) -> None:
+def write_csv_atomic(path: Path, headers: list[str], rows: list[dict[str, str]], *, overwrite: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
@@ -509,7 +568,15 @@ def write_csv_atomic(path: Path, headers: list[str], rows: list[dict[str, str]])
             writer = csv.DictWriter(handle, fieldnames=headers, extrasaction="ignore", lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
-        os.replace(temporary_name, path)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if overwrite:
+            os.replace(temporary_name, path)
+        else:
+            # Link publishes the fully written file atomically and fails if the
+            # destination exists; a check-then-replace would race another run.
+            os.link(temporary_name, path)
+            os.unlink(temporary_name)
     except Exception:
         try:
             os.unlink(temporary_name)

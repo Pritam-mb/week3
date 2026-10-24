@@ -98,6 +98,8 @@ class CompileFeedbackTests(unittest.TestCase):
             self.assertEqual(version["provider_metadata"]["llm_calls"], 2)
             self.assertEqual(version["provider_metadata"]["prompt_tokens"], 30)
             self.assertEqual(version["provider_metadata"]["response_tokens"], 12)
+            self.assertEqual([item["status"] for item in version["provider_metadata"]["attempt_log"]], ["REJECTED", "ACCEPTED"])
+            self.assertEqual(service.get_version(version["id"])["provider_metadata"]["attempt_log"], version["provider_metadata"]["attempt_log"])
 
             automation_after = service.get_automation(automation["id"])
             self.assertEqual(len(automation_after["versions"]), 2)
@@ -208,6 +210,45 @@ class CompileFeedbackTests(unittest.TestCase):
             self.assertIs(context.exception, last_error)
             self.assertEqual(len(calls), 3)
             self.assertEqual(service.get_automation(automation["id"])["versions"], [])
+            self.assertEqual(context.exception.details["llm_calls"], 3)
+            self.assertEqual(len(context.exception.details["attempt_log"]), 3)
+            self.assertNotIn("last provider failure", json.dumps(context.exception.details))
+
+    def test_unfixable_setup_errors_stop_without_spending_retry_budget(self) -> None:
+        for code, expected_calls in (("MODEL_PROMPT_TOO_LARGE", 0), ("MODEL_NOT_FOUND", 1)):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
+                service = self.service(directory, retries=2)
+                source = self.expense_input(service)
+                automation = service.create_automation("Stopped compile")
+                with patch("molt.application.generate_recipe", side_effect=MoltError(code, "safe failure")) as generate:
+                    with self.assertRaises(MoltError) as context:
+                        service.generate_candidate(automation["id"], "Normalize", service.profile(source))
+                generate.assert_called_once()
+                self.assertEqual(context.exception.details["llm_calls"], expected_calls)
+                self.assertEqual(service.get_automation(automation["id"])["versions"], [])
+
+    def test_real_adapter_rejects_invalid_then_semantically_wrong_without_activation(self) -> None:
+        from tests.test_ollama import FakeResponse
+
+        with tempfile.TemporaryDirectory() as directory:
+            service = self.service(directory, retries=2)
+            source = self.expense_input(service)
+            automation = service.create_automation("Guarded compile")
+            initial = service.create_version(automation["id"], copy.deepcopy(EXPENSE_RECIPE))
+            service.verify_version(initial["id"])
+            service.approve_version(initial["id"])
+            invalid = copy.deepcopy(EXPENSE_RECIPE)
+            invalid["operations"][0] = {"type": "trim", "column": "merchant"}
+            wrong = self.wrong_expense_recipe()
+            with patch("molt.ollama.urlopen", side_effect=[FakeResponse({"response": json.dumps(value)}) for value in (invalid, wrong, wrong)]):
+                rejected = service.generate_candidate(automation["id"], "Normalize", service.profile(source))
+            self.assertEqual(rejected["status"], "REJECTED")
+            self.assertEqual(rejected["provider_metadata"]["llm_calls"], 3)
+            self.assertEqual([item["stage"] for item in rejected["provider_metadata"]["attempt_log"]], ["generation", "fixture_verification", "fixture_verification"])
+            self.assertEqual(service.get_automation(automation["id"])["active_version"]["id"], initial["id"])
+            with self.assertRaises(MoltError):
+                service.approve_version(rejected["id"])
+            self.assertEqual(list(service.config.done_dir.iterdir()), [])
 
     def test_fixture_recipe_path_does_not_call_model_or_verify(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

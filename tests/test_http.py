@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -94,6 +95,64 @@ class HTTPTests(unittest.TestCase):
                 status, run = post(f"/api/automations/{automation_id}/runs", {"path": str(input_path)})
                 self.assertEqual(status, 201)
                 self.assertEqual(run["status"], "SUCCEEDED")
+            finally:
+                connection.close()
+                server.shutdown()
+                server.server_close()
+
+    def test_temporal_run_start_and_status_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(__file__).resolve().parents[1]
+            service = MoltService(MoltConfig(Path(directory)))
+            input_path = Path(directory) / "input.csv"
+            input_path.write_bytes((root / "examples/input/golden.csv").read_bytes())
+            automation = service.create_automation("Temporal API", "Durable execution", str(input_path))
+            version = service.generate_candidate(
+                automation["id"],
+                "Normalize fixture",
+                service.profile(input_path),
+                recipe_file=str(root / "examples/recipes/expense-v1.json"),
+            )
+            self.assertEqual(service.verify_version(version["id"])["status"], "PASS")
+            service.approve_version(version["id"])
+            handler = type("TestMoltHandler", (MoltHandler,), {"service": service})
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            connection = HTTPConnection("127.0.0.1", server.server_port, timeout=10)
+            try:
+                with patch("molt.temporal.start_workflow", return_value={"workflow_id": "molt-workflow-1", "run_id": "run-1"}) as start:
+                    connection.request(
+                        "POST",
+                        f"/api/automations/{automation['id']}/temporal-runs",
+                        body=json.dumps({"input_reference": str(input_path), "wait": False}),
+                        headers={"Content-Type": "application/json"},
+                    )
+                    response = connection.getresponse()
+                    payload = json.loads(response.read())
+                self.assertEqual(response.status, 202)
+                self.assertEqual(payload["status"], "STARTED")
+                start.assert_called_once()
+
+                with patch("molt.temporal.start_workflow", return_value={"workflow_id": "molt-workflow-drift", "run_id": "run-drift", "result": {"status": "BLOCKED_DRIFT", "llm_calls": 0}}):
+                    connection.request(
+                        "POST",
+                        f"/api/automations/{automation['id']}/temporal-runs",
+                        body=json.dumps({"input_reference": str(input_path), "wait": True}),
+                        headers={"Content-Type": "application/json"},
+                    )
+                    response = connection.getresponse()
+                    blocked = json.loads(response.read())
+                self.assertEqual(response.status, 202)
+                self.assertEqual(blocked["status"], "COMPLETED")
+                self.assertEqual(blocked["result"]["status"], "BLOCKED_DRIFT")
+
+                with patch("molt.temporal.describe_workflow", return_value={"workflow_id": "molt-workflow-1", "status": "RUNNING"}):
+                    connection.request("GET", "/api/temporal-runs/molt-workflow-1")
+                    response = connection.getresponse()
+                    status_payload = json.loads(response.read())
+                self.assertEqual(response.status, 200)
+                self.assertEqual(status_payload["status"], "RUNNING")
             finally:
                 connection.close()
                 server.shutdown()

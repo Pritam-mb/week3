@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>molt · Evidence diff</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="diff.css">
+</head>
+<body>
+  <div class="diff-shell">
+    <header class="topbar">
+      <a class="wordmark" href="/" aria-label="Back to Molt dashboard"><span class="thread-glyph" aria-hidden="true"><i></i><i></i><i></i></span><span>molt</span></a>
+      <div class="source-note"><span class="live-dot online"></span><span>Evidence diff · local-only</span></div>
+      <div class="top-actions"><a class="theme-button" href="/">Dashboard</a><button class="theme-button" id="theme-button" type="button">Theme</button></div>
+    </header>
+
+    <main class="diff-main">
+      <div class="diff-heading">
+        <div><p class="kicker">EVIDENCE DIFF</p><h1>Before Molt · After Molt</h1><p class="lede">A safe run report for one file: what arrived, what the approved recipe decided, and what was written—or deliberately not written.</p></div>
+        <div class="diff-controls"><label>Run ID<input id="run-id" type="text" placeholder="Select a run from the dashboard"></label><button class="quiet-button primary" id="load-run" type="button">Load evidence</button></div>
+      </div>
+
+      <div id="diff-status" class="diff-status" role="status" aria-live="polite">Choose a run from the dashboard, or enter a run ID above.</div>
+      <section class="evidence-cards" id="evidence-cards"></section>
+
+      <section class="diff-grid">
+        <article class="diff-panel panel"><div class="panel-heading"><div><p class="kicker">BEFORE</p><h2>Input contract observed</h2></div><span class="diff-badge neutral" id="before-badge">incoming</span></div><div id="before-content" class="diff-content empty">No run loaded.</div></article>
+        <article class="diff-panel panel"><div class="panel-heading"><div><p class="kicker">AFTER</p><h2>Recipe decision</h2></div><span class="diff-badge neutral" id="after-badge">result</span></div><div id="after-content" class="diff-content empty">No run loaded.</div></article>
+      </section>
+
+      <section class="panel decision-panel"><div class="panel-heading"><div><p class="kicker">DECISION TRACE</p><h2>Why this file was accepted or blocked</h2></div><span class="chart-note" id="trace-caption">Stored evidence only</span></div><div id="decision-trace" class="trace-list"><div class="empty">No run loaded.</div></div></section>
+
+      <section class="panel recipe-panel"><div class="panel-heading"><div><p class="kicker">APPROVED RECIPE</p><h2>What Molt was allowed to do</h2></div><a id="dashboard-link" class="quiet-button" href="/">Back to dashboard</a></div><div id="recipe-content" class="recipe-evidence empty">No run loaded.</div></section>
+    </main>
+  </div>
+  <script src="diff.js" defer></script>
+</body>
+</html>
