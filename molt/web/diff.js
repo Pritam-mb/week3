@@ -24,6 +24,7 @@
     const version = (automation?.versions || []).find((item) => item.id === run.recipe_version_id);
     const recipe = version?.recipe || {};
     const details = run.error_details || {};
+    document.title = `${blocked ? "Blocked drift" : "Succeeded"} · ${fileName(run.input)} · molt evidence`;
     const cards = [
       [blocked ? "BLOCKED_DRIFT" : "SUCCEEDED", "Molt decision", blocked ? "bad" : "ok"],
       [number(run.rows_read), "Rows read", ""],

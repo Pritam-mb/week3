@@ -131,3 +131,31 @@ test('dashboard explains the contract and exposes structural drift details', asy
   assert.match(ui.element('#run-inspector').innerHTML, /Why Molt blocked this file/);
   assert.match(ui.element('#run-inspector').innerHTML, /category/);
 });
+
+test('graphite dashboard uses truthful empty states and exposes roles and repair surface', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../molt/web/index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../molt/web/style.css'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '../molt/web/app.js'), 'utf8');
+  assert.match(html, /No runs yet/);
+  assert.match(html, /System and roles/);
+  assert.match(html, /repair-card/);
+  assert.match(css, /--bg:#131416/);
+  assert.match(css, /Barlow Semi Condensed/);
+  assert.doesNotMatch(html + css + script, /1,428|24,680|12\.4 ms|3\.5s agent/);
+  assert.doesNotMatch(html + css + script, /🔍|↗|🧊|🛡️|💰|⏱️/);
+});
+
+test('dashboard explains recipe acceptance and the ordered repair path', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../molt/web/index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '../molt/web/app.js'), 'utf8');
+  assert.match(html, /Recipe and approval/);
+  assert.match(html, /The recipe is visible before it can run/);
+  assert.match(script, /Accept recipe/);
+  assert.match(script, /Candidate awaiting independent verification/);
+  assert.match(script, /1\. Drift blocked/);
+  assert.match(script, /2\. Ask Mastra/);
+  assert.match(script, /3\. Candidate stored/);
+  assert.match(script, /4\. Run tests/);
+  assert.match(script, /5\. Human decision/);
+  assert.match(script, /Not accepted/);
+});

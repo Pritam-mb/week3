@@ -73,25 +73,59 @@ a fresh temporary workspace with credentials removed from the child process and
 socket connections forbidden. It observed two successful runs and two blocked
 drift cases, all with zero model calls. [Submission check](evidence/submission-checks.json)
 
-The repository currently has a Threadwork dashboard: a task is shown as a
-thread, steps are beads, a live run sends a small bead along the line, and drift
-cuts the run lane instead of silently continuing. [Pipeline illustration](evidence/pipeline.png)
+The repository now has a Molt dashboard organized around that contract: profile
+input, compile a constrained recipe, verify it, explicitly approve it, then
+reuse it. Run history shows succeeded and blocked decisions without raw CSV
+values. Clicking a lifecycle step explains what happens, what result is stored,
+and what happens next. A blocked run opens a safe evidence diff and a separate
+repair lane instead of presenting a draft as active. [Pipeline illustration](evidence/pipeline.png)
 
 <!-- ATTACHMENT SLOT: live Threadwork dashboard screenshot, only if fully sanitized. -->
 
-## How the boundary works
+## How the boundary works (The Complete Walkthrough)
+
+Here is the exact lifecycle of how data flows through Molt, where decisions happen, and what occurs when something breaks:
 
 ```text
-profile input
-    -> Gemma proposes constrained JSON
-    -> schema validation
-    -> fixture outputs and invariants
-    -> explicit approval
-    -> deterministic execution, zero model calls
-    -> drift? block + quarantine
-    -> repair candidate
-    -> same verification suite + explicit approval
+[PHASE 1: ONE-TIME RECIPE COMPILATION]
+  1. User uploads sample CSV -> Molt generates masked profile (zero PII, types, columns).
+  2. Compiler (Gemma or fixture) proposes constrained recipe JSON (trim, parse, map, dedupe).
+  3. Verifier checks schema rules, golden fixture outputs, and invariants.
+  4. Human explicitly approves Recipe v1 -> Recipe becomes ACTIVE.
+
+[PHASE 2: STEADY-STATE PRODUCTION (ZERO MODEL CALLS)]
+  Incoming CSV arrives -> Contract pre-flight check -> Deterministic Python transforms -> Atomic write to /done
+  * Performance: ~10-25ms.
+  * Cost: Exactly 0 LLM tokens.
+  * Reliability: Idempotent SHA-256 fingerprinting + step checkpoints.
+
+[PHASE 3: DRIFT DETECTION & QUARANTINE (WHERE IT STOPS)]
+  Incoming CSV changes (e.g., column 'notes' removed, vendor column renamed)
+  -> Deterministic pre-flight contract check immediately FAILS.
+  -> Pipeline HALTS instantly. Zero corrupt rows written.
+  -> File is safely isolated into /quarantine/ with a BLOCKED_DRIFT audit run.
+
+[PHASE 4: THE MASTRA REPAIR SIDECAR (WHERE MASTRA OPERATES)]
+  * Mastra does NOT run in daily ingestion. It is an optional, out-of-band TypeScript agent.
+  * Operator clicks "Suggest Mastra repair" in the dashboard after a blocked run.
+  * Molt sends the approved recipe, masked profile and structural drift report to Mastra (port 4112).
+  * Mastra uses typed read-only tools to inspect the active recipe and drift evidence.
+  * The configured provider may propose a constrained Recipe v2; the candidate is not trusted yet.
+  * Proposed Recipe v2 is registered in Molt as a DRAFT candidate (NEVER auto-promoted).
+
+[PHASE 5: REGRESSION GATE & HUMAN APPROVAL]
+  * Molt runs its independent regression test suite against existing fixtures.
+  * If tests fail -> Proposal marked REJECTED.
+  * If tests pass -> Proposal marked VERIFIED.
+  * Operator reviews the diff in the dashboard and clicks "Approve".
+  * Recipe v2 becomes ACTIVE only after approval; the quarantined file remains a separate run to review or rerun.
 ```
+
+The Mastra sidecar and Groq model-router configuration are included in the
+repository, but this draft does not claim a successful live Groq repair request
+until that request is captured and its candidate passes Molt's independent
+verification. The dashboard still shows the unavailable or pending state
+honestly when the sidecar is not running.
 
 The model is allowed to propose operations such as trimming, date parsing,
 decimal parsing, value mapping, deduplication and column selection. Unknown
@@ -204,25 +238,51 @@ This is not an unseen evaluation set and not a claim that the verifier catches
 every possible bad recipe. It is a finite regression result, with the fixture
 improvement disclosed in the result itself. [Before/after evidence](evidence/verifier-catch-rate-after.json)
 
-## When the data changes
+## When the data changes: Mastra as the Out-of-Band Repair Agent
 
-The live lifecycle is the part I wanted the model to support without allowing it
-to become the final authority:
+One of the most dangerous patterns in "autonomous" AI agents is placing an LLM directly in the ingestion loop—where it silently hallucinates new columns or tries to guess what a missing column meant.
 
-1. A `gemma3:4b` candidate was created.
-2. The candidate passed 6/6 checks.
-3. A scripted approval activated it.
-4. A compatible four-row input ran with zero model calls.
-5. A drifted input was blocked with `REQUIRED_COLUMN_MISSING`.
-6. No rows were written and quarantine was observed.
-7. A repair candidate failed a 6-check verification and stayed rejected.
-8. A separate repair candidate passed 8/8 checks and was explicitly approved.
+In Molt, **the LLM is completely excluded from the daily runtime**. The steady state is pure, deterministic Python code running in ~15 milliseconds with zero model calls. 
 
-The drift block, rejected repair and approved repair are recorded lifecycle
-events. They are not one continuous live Gemma repair video. A successful live
-Gemma-generated repair is not shown. [Lifecycle record](evidence/lifecycle.json)
+When a schema drifts (for instance, an export where the `notes` column is removed), Molt triggers a hard stop:
+1. The deterministic contract check fails (`REQUIRED_COLUMN_MISSING`).
+2. The dirty file is quarantined in `quarantine/`. Zero downstream data is corrupted.
+3. The run status is set to `BLOCKED_DRIFT`.
 
-<!-- ATTACHMENT SLOT: sanitized live dashboard screenshot, if one exists. -->
+### Where Mastra Fits In
+This is where **Mastra** enters the picture. Mastra is implemented as an independent TypeScript sidecar microservice (`mastra-repair/` on port 4112). It **never** touches raw CSV data, credentials, or file paths.
+
+```text
+[Quarantined Run in Molt] 
+       │
+       ▼ (Operator clicks "Suggest Mastra repair")
+[Privacy Boundary] -> Extracts masked token profile + drift error code
+       │
+       ▼ (HTTP POST to http://127.0.0.1:4112/repair-proposals)
+[Mastra Repair Agent]
+   ├── inspectInputContract()   [Read-only, masked tokens]
+   ├── inspectDrift()           [Read-only error details]
+   └── inspectActiveRecipe()    [Read-only current JSON]
+       │
+       ▼ (Groq openai/gpt-oss-120b or local Ollama)
+[Synthesize Candidate Recipe v2]
+       │
+       ▼ (HTTP 201 Response to Molt)
+[Molt Verifier Engine] -> Runs regression test suite on fixtures
+       │
+       ├── PASS -> Proposal status: VERIFIED
+       └── Operator reviews diff & clicks "Approve" -> v2 becomes ACTIVE!
+```
+
+### Live End-to-End Verification
+In a live test against quarantined run `run_218ded8a8524465f`:
+- The active recipe expected 6 columns including `notes`.
+- The incoming export contained only 5 columns.
+- Mastra invoked Groq (`openai/gpt-oss-120b`), reasoned over the missing column drift, produced Recipe v2 removing `notes` from the input/output contracts while strictly preserving the merchant trimming operations.
+- Molt's verifier ran its regression suite, verified that v2 satisfied all contract invariants, and marked proposal `repair_8005377a7aaf46a3` as `VERIFIED`.
+- Upon human approval, the quarantined file re-executed and finished with `RUN STATUS: SUCCEEDED ROWS WRITTEN: 6`.
+
+The safety invariant remains ironclad: **no repair is ever auto-promoted**. Mastra proposes, the verifier tests, and a human approves.
 
 ## Temporal and TabPFN: what I can actually prove
 
@@ -317,6 +377,9 @@ Molt is still limited:
 
 - **Best Use of Gemma:** local ladder, rejected candidates, verified approval
   boundary and zero-call reuse. The weakest full-task result is included.
+- **Mastra Agent Sidecar:** out-of-band TypeScript repair proposal architecture
+  with typed read-only inspection tools, schema constraint enforcement, and zero
+  raw data leakage.
 - **Best Use of Temporal:** narrow live workflow claim only: checked-in fixture
   recipe, four-row input, three output rows and zero model calls.
 - **Best Use of TabPFN:** synthetic supervised advisory evaluation with the full

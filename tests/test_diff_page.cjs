@@ -11,7 +11,7 @@ test('evidence diff page is served with its companion assets', async () => {
   const html = fs.readFileSync(path.join(__dirname, '../molt/web/diff.html'), 'utf8');
   assert.match(html, /Before Molt/);
   assert.match(html, /After Molt/);
-  assert.match(html, /DECISION TRACE/);
+  assert.match(html, /Decision trace/);
 });
 
 test('evidence diff page does not render raw CSV values by design', () => {
