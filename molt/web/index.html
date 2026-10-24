@@ -3,160 +3,81 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f4f7f4">
-  <title>Molt · Local automation dashboard</title>
+  <meta name="theme-color" content="#f1f4f6">
+  <title>molt · Threadwork</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Primary navigation">
-      <a class="brand" href="#overview" data-nav="overview" aria-label="Molt overview">
-        <span class="brand-mark" aria-hidden="true">M</span>
-        <span>
-          <strong>Molt</strong>
-          <small>local automation</small>
-        </span>
+  <div class="shell">
+    <header class="topbar">
+      <a class="wordmark" href="#top" aria-label="molt home">
+        <span class="thread-glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>molt</span>
       </a>
+      <div class="source-note"><span class="live-dot" id="source-dot"></span><span id="source-note">Local API · connecting</span></div>
+      <div class="top-actions">
+        <span class="status-chip" id="health-chip"><span class="status-dot"></span>Checking</span>
+        <span class="status-chip" id="model-chip"><span class="status-dot"></span>Model idle</span>
+        <button class="theme-button" id="theme-button" type="button" aria-label="Change color theme">Theme</button>
+      </div>
+    </header>
 
-      <nav class="nav-list">
-        <a href="#overview" data-nav="overview" class="nav-item active"><span class="nav-icon">⌂</span>Overview</a>
-        <a href="#automations" data-nav="automations" class="nav-item"><span class="nav-icon">◇</span>Automations</a>
-        <a href="#recipe-review" data-nav="recipe-review" class="nav-item"><span class="nav-icon">✓</span>Recipe review <span class="nav-count" id="review-count">0</span></a>
-        <a href="#runs" data-nav="runs" class="nav-item"><span class="nav-icon">↗</span>Runs</a>
-        <a href="#drift" data-nav="drift" class="nav-item"><span class="nav-icon">⌁</span>Drift &amp; repair <span class="nav-count warning" id="drift-count">0</span></a>
-      </nav>
+    <div class="workspace" id="top">
+      <aside class="rail" aria-label="Automations">
+        <div class="rail-heading"><span>Threads</span><span class="rail-count" id="automation-count">0</span></div>
+        <nav class="automation-rail" id="automation-rail"></nav>
+        <div class="rail-foot"><span class="rail-line"></span><span>local workspace</span></div>
+      </aside>
 
-      <div class="sidebar-foot">
-        <div class="local-card">
-          <span class="status-dot" id="sidebar-health-dot"></span>
+      <main class="main" id="main-content">
+        <div class="main-heading">
           <div>
-            <strong id="sidebar-health-label">Connecting</strong>
-            <small id="sidebar-health-detail">Checking local API…</small>
+            <p class="kicker">THREADWORK</p>
+            <h1 id="automation-title">Loading your thread</h1>
+            <p class="lede" id="automation-description">Live from the local API.</p>
+          </div>
+          <div class="heading-actions">
+            <span class="sync-label" id="sync-label">Not synced</span>
+            <button class="quiet-button" id="refresh-button" type="button">Refresh</button>
           </div>
         </div>
-        <p class="sidebar-note">Your files and recipes stay on this machine.</p>
-      </div>
-    </aside>
 
-    <main class="main-content">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">MOLT WORKSPACE</p>
-          <h1 id="page-title">Overview</h1>
+        <section class="hero-metric" aria-labelledby="calls-title">
+          <div class="hero-number" id="calls-number">0</div>
+          <div><h2 id="calls-title">model calls at run time</h2><p id="calls-caption">Reuse is quiet by design.</p></div>
+        </section>
+
+        <section class="thread-panel panel" aria-labelledby="thread-title">
+          <div class="panel-heading">
+            <div><p class="kicker">THE WORKING THREAD</p><h2 id="thread-title">Compile once. Run with a checked recipe.</h2></div>
+            <span class="legend"><span class="legend-item"><i class="legend-dot ok"></i>active</span><span class="legend-item"><i class="legend-dot bad"></i>blocked</span></span>
+          </div>
+          <div class="thread-canvas" id="thread-canvas" role="group" aria-label="Molt workflow graph"></div>
+          <div class="thread-explanation" id="thread-explanation" aria-live="polite">Select a bead to inspect its role.</div>
+        </section>
+
+        <div class="two-column">
+          <section class="panel chart-panel" aria-labelledby="chart-title">
+            <div class="panel-heading"><div><p class="kicker">CALLS OVER RUNS</p><h2 id="chart-title">Inference stays out of the loop</h2></div><span class="chart-note" id="run-summary">0 runs</span></div>
+            <div class="chart-wrap" id="calls-chart" role="img" aria-label="Calls over runs chart"></div>
+            <div class="chart-legend"><span><i class="line-sample baseline"></i>agent every run</span><span><i class="line-sample molt-line"></i>molt</span></div>
+          </section>
+
+          <section class="panel versions-panel" aria-labelledby="versions-title">
+            <div class="panel-heading"><div><p class="kicker">RECIPE VERSIONS</p><h2 id="versions-title">Beads that passed review</h2></div><span class="chart-note" id="version-summary">0 versions</span></div>
+            <div id="versions-list" class="version-list"></div>
+          </section>
         </div>
-        <div class="topbar-actions">
-          <span class="last-updated" id="last-updated">Not synced yet</span>
-          <button class="button button-quiet" type="button" id="refresh-button"><span aria-hidden="true">↻</span> Refresh</button>
-          <button class="button button-primary" type="button" data-open-create>+ New automation</button>
-        </div>
-      </header>
 
-      <div class="page-body">
-        <section class="page-section" id="overview" data-section="overview" aria-labelledby="overview-heading">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">AT A GLANCE</p>
-              <h2 id="overview-heading">Your local control room</h2>
-              <p class="section-description">Compile once, verify against evidence, then reuse deterministic recipes until input drift is found.</p>
-            </div>
-            <span class="pill pill-neutral" id="api-status-pill">API checking</span>
-          </div>
-
-          <div class="metric-grid" id="metrics-grid" aria-live="polite">
-            <article class="metric-card skeleton-card"><span class="skeleton line-short"></span><span class="skeleton line-large"></span><span class="skeleton line-medium"></span></article>
-            <article class="metric-card skeleton-card"><span class="skeleton line-short"></span><span class="skeleton line-large"></span><span class="skeleton line-medium"></span></article>
-            <article class="metric-card skeleton-card"><span class="skeleton line-short"></span><span class="skeleton line-large"></span><span class="skeleton line-medium"></span></article>
-            <article class="metric-card skeleton-card"><span class="skeleton line-short"></span><span class="skeleton line-large"></span><span class="skeleton line-medium"></span></article>
-          </div>
-
-          <div class="overview-grid">
-            <article class="panel panel-large">
-              <div class="panel-heading">
-                <div><p class="eyebrow">RECENT ACTIVITY</p><h3>Latest runs</h3></div>
-                <a href="#runs" class="text-link" data-nav="runs">View all <span aria-hidden="true">→</span></a>
-              </div>
-              <div id="overview-runs" class="table-wrap"></div>
-            </article>
-            <article class="panel ledger-panel">
-              <div class="panel-heading"><div><p class="eyebrow">SAVINGS LEDGER</p><h3>Inference avoided</h3></div><span class="ledger-icon" aria-hidden="true">✦</span></div>
-              <div id="ledger-content" class="ledger-content"></div>
-            </article>
-          </div>
+        <section class="panel runs-panel" aria-labelledby="runs-title">
+          <div class="panel-heading"><div><p class="kicker">RUN HISTORY</p><h2 id="runs-title">The thread remembers</h2></div><span class="chart-note">blocked drift stays visible</span></div>
+          <div class="run-table-wrap"><table class="run-table"><thead><tr><th>Run</th><th>Status</th><th>Rows</th><th>Model calls</th><th>Recipe</th><th>Duration</th></tr></thead><tbody id="runs-body"></tbody></table></div>
         </section>
 
-        <section class="page-section" id="automations" data-section="automations" aria-labelledby="automations-heading">
-          <div class="section-heading section-heading-inline">
-            <div><p class="eyebrow">WORKFLOWS</p><h2 id="automations-heading">Automations</h2><p class="section-description">Each automation has an active, human-approved recipe version.</p></div>
-            <button class="button button-primary" type="button" data-open-create>+ New automation</button>
-          </div>
-          <div class="automation-layout">
-            <div id="automations-list" class="automation-list"></div>
-            <aside class="panel selected-automation" id="automation-detail" aria-live="polite"></aside>
-          </div>
-        </section>
-
-        <section class="page-section" id="recipe-review" data-section="recipe-review" aria-labelledby="recipe-heading">
-          <div class="section-heading">
-            <div><p class="eyebrow">HUMAN APPROVAL GATE</p><h2 id="recipe-heading">Recipe review</h2><p class="section-description">Tests decide whether a candidate can be approved. A green status always includes its evidence.</p></div>
-            <span class="pill pill-amber" id="recipe-status-pill">No candidate selected</span>
-          </div>
-          <div id="recipe-review-content" class="review-layout"></div>
-        </section>
-
-        <section class="page-section" id="runs" data-section="runs" aria-labelledby="runs-heading">
-          <div class="section-heading section-heading-inline">
-            <div><p class="eyebrow">EXECUTION HISTORY</p><h2 id="runs-heading">Runs</h2><p class="section-description">Deterministic executions, blocked drift, and the evidence recorded for each input.</p></div>
-            <button class="button button-secondary" type="button" id="run-selected-button" disabled>Run selected automation</button>
-          </div>
-          <div class="panel">
-            <div id="runs-table" class="table-wrap"></div>
-          </div>
-        </section>
-
-        <section class="page-section" id="drift" data-section="drift" aria-labelledby="drift-heading">
-          <div class="section-heading">
-            <div><p class="eyebrow">FAIL CLOSED</p><h2 id="drift-heading">Drift &amp; repair</h2><p class="section-description">Inputs that no longer match are blocked and quarantined. Repair candidates remain inactive until the full regression suite passes.</p></div>
-            <span class="pill pill-neutral" id="repair-status-pill">No open proposals</span>
-          </div>
-          <div id="drift-content" class="drift-layout"></div>
-        </section>
-      </div>
-
-      <footer class="footer"><span>Molt local dashboard</span><span>Model proposes · Tests decide · Human approves</span></footer>
-    </main>
+        <div class="api-note" id="api-note" aria-live="polite">Live from the local API</div>
+      </main>
+    </div>
   </div>
-
-  <dialog class="modal" id="create-modal" aria-labelledby="create-modal-title">
-    <form method="dialog" class="modal-card" id="create-form">
-      <div class="modal-heading"><div><p class="eyebrow">NEW WORKFLOW</p><h2 id="create-modal-title">Create an automation</h2></div><button class="icon-button" type="button" data-close-create aria-label="Close dialog">×</button></div>
-      <p class="modal-intro">Describe the repeated CSV task. Molt will profile the input before asking the local model to propose a constrained recipe.</p>
-      <label class="field-label" for="automation-name">Automation name <span>required</span></label>
-      <input class="text-input" id="automation-name" name="name" required placeholder="e.g. Normalize expense exports">
-      <label class="field-label" for="automation-description">Task description <span>required</span></label>
-      <textarea class="text-input textarea" id="automation-description" name="description" required rows="3" placeholder="What should happen to each CSV? Include important rules and edge cases."></textarea>
-       <label class="field-label" for="automation-file">CSV file <span>recommended</span></label>
-       <input class="text-input" id="automation-file" name="file" type="file" accept=".csv,text/csv">
-       <label class="field-label" for="automation-input">Input file reference <span>optional if CSV selected</span></label>
-       <input class="text-input" id="automation-input" name="input_reference" placeholder="A CSV already inside the workspace">
-       <label class="field-label" for="automation-model">Local Ollama model <span>optional</span></label>
-       <input class="text-input" id="automation-model" name="model" placeholder="e.g. gemma3:4b">
-      <p class="privacy-note"><span aria-hidden="true">▣</span> Local-first: only the input context required for profiling and recipe generation is sent to your configured local model.</p>
-      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-create>Cancel</button><button class="button button-primary" type="submit">Create draft</button></div>
-    </form>
-  </dialog>
-
-  <dialog class="modal" id="run-modal" aria-labelledby="run-modal-title">
-    <form method="dialog" class="modal-card" id="run-form">
-      <div class="modal-heading"><div><p class="eyebrow">DETERMINISTIC EXECUTION</p><h2 id="run-modal-title">Run an automation</h2></div><button class="icon-button" type="button" data-close-run aria-label="Close dialog">×</button></div>
-      <p class="modal-intro" id="run-modal-intro">Use the active approved recipe on a compatible CSV.</p>
-      <label class="field-label" for="run-input">Input file reference <span>required</span></label>
-      <input class="text-input" id="run-input" name="input_reference" required placeholder="Path to a CSV on the local server">
-      <label class="field-label" for="run-output">Output reference <span>optional</span></label>
-      <input class="text-input" id="run-output" name="output_reference" placeholder="Leave empty for the server default">
-      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-run>Cancel</button><button class="button button-primary" type="submit">Start run</button></div>
-    </form>
-  </dialog>
-
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
   <script src="app.js" defer></script>
 </body>

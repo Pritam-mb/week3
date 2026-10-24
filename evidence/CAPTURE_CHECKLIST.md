@@ -13,7 +13,8 @@
   `pipeline.png` is the browser-rendered upload version; visually inspected.
 - TabPFN: `tabpfn-accuracy.json` — synthetic, supervised, advisory.
 - Temporal: `tabpfn-temporal-live.json` — live fixture recipe, four input rows,
-  zero model calls; no demonstrated crash recovery.
+  zero model calls; `temporal-crash-recovery.json` additionally records a real
+  local Temporal activity failure, retry and checkpoint resume.
 
 ## Manual captures still required
 
@@ -22,12 +23,13 @@
 - [ ] Temporal UI workflow: current server was started headless; UI port 8233
   was not reachable at this audit. Do not fabricate a UI screenshot or restart
   a busy server merely for a picture. CLI completion evidence already exists.
-- [x] Sentry: the live Molt workflow trace was inspected. It contained
-  sensitive CSV values and local file paths, so it is **not publishable**. Do
-  not use or upload any Sentry screenshot. The local screenshot was removed
-  from `evidence/`; Sentry remains implemented, but the trace is intentionally
-  omitted from the post. The old DSN was rotated/disabled and the replacement
-  remains private in local config.
+- [~] Sentry: the root transaction and all child spans of the live Molt
+  workflow trace were inspected. The trace showed nine expected stages,
+  timings and generic status attributes; no CSV values, prompts, responses,
+  paths or credentials were visible. The exposed DSN was reported rotated/
+  disabled; account-side rotation is not independently verifiable from this
+  repository. Save the clean screenshot as `evidence/sentry-trace.png` before
+  linking it in the post; no screenshot is currently stored in the repository.
 - [ ] Review historical credential-shaped matches reported in
   `repo-hygiene.json`; revoke old credentials if real. Do not paste them in chat.
 - [ ] Ask a person to read `POST_DRAFT.md` and state its point in one sentence.

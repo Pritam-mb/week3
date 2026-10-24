@@ -1,0 +1,31 @@
+{
+  "status": "COMPLETE",
+  "workflow": {
+    "result_status": "SUCCEEDED",
+    "temporal_outcome": "completed",
+    "llm_calls": 0,
+    "rows_read": 4,
+    "rows_written": 3
+  },
+  "failure_injection": {
+    "mode": "MOLT_CRASH_AT",
+    "after_step": 1,
+    "activity_attempts": 2,
+    "history_event_types": [
+      "WORKFLOW_EXECUTION_STARTED",
+      "ACTIVITY_TASK_SCHEDULED",
+      "ACTIVITY_TASK_STARTED",
+      "ACTIVITY_TASK_COMPLETED",
+      "ACTIVITY_TASK_FAILED",
+      "TIMER_STARTED",
+      "TIMER_FIRED",
+      "ACTIVITY_TASK_SCHEDULED",
+      "ACTIVITY_TASK_STARTED",
+      "ACTIVITY_TASK_COMPLETED",
+      "WORKFLOW_EXECUTION_COMPLETED"
+    ],
+    "checkpoint_created": true,
+    "checkpoint_resumed": true
+  },
+  "claim_boundary": "Real local Temporal server and worker workflow; one injected activity failure and Temporal retry. Not a production durability claim."
+}

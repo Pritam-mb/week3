@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 import shutil
+import os
 
 from molt.application import MoltService
 from molt.config import MoltConfig
@@ -101,6 +102,41 @@ class TemporalOptionalTests(unittest.TestCase):
             self.assertTrue(list(config.checkpoints_dir.glob("*/state.json")))
             replay = execute_run_activity(request)
             self.assertEqual(replay["temporal_outcome"], "idempotent_replay")
+
+    def test_activity_retry_resumes_after_one_shot_simulated_crash(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            config = MoltConfig(Path(directory))
+            service = MoltService(config)
+            source = config.input_dir / "golden.csv"
+            shutil.copy2(root / "examples/input/golden.csv", source)
+            automation = service.create_automation("Temporal crash recovery", "Resume a checked recipe after a worker interruption.")
+            version = service.generate_candidate(
+                automation["id"],
+                "Normalize the fixture",
+                service.profile(source),
+                recipe_file=str(root / "examples/recipes/expense-v1.json"),
+            )
+            self.assertEqual(service.verify_version(version["id"])["status"], "PASS")
+            service.approve_version(version["id"])
+            request = build_run_request(directory, automation["id"], source)
+            previous = os.environ.get("MOLT_CRASH_AT")
+            os.environ["MOLT_CRASH_AT"] = "1"
+            try:
+                with self.assertRaises(RuntimeError):
+                    execute_run_activity(request)
+                checkpoint_states = list(config.checkpoints_dir.glob("*/state.json"))
+                self.assertTrue(checkpoint_states)
+                self.assertEqual(checkpoint_states[0].read_text(encoding="utf-8").count('"status": "running"'), 1)
+                resumed = execute_run_activity(request)
+            finally:
+                if previous is None:
+                    os.environ.pop("MOLT_CRASH_AT", None)
+                else:
+                    os.environ["MOLT_CRASH_AT"] = previous
+            self.assertEqual(resumed["status"], "SUCCEEDED")
+            self.assertEqual(resumed["temporal_outcome"], "completed")
+            self.assertTrue(resumed["rows_written"] > 0)
 
     def test_default_workflow_id_is_stable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

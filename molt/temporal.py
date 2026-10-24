@@ -23,6 +23,8 @@ try:  # The opt-in branch is only loaded when temporalio is installed.
     from temporalio.common import RetryPolicy as _RetryPolicy
     from temporalio.exceptions import ApplicationError as _ApplicationError
     from temporalio.worker import Worker as _TemporalWorker
+    from temporalio.worker.workflow_sandbox import SandboxRestrictions as _SandboxRestrictions
+    from temporalio.worker.workflow_sandbox import SandboxedWorkflowRunner as _SandboxedWorkflowRunner
 
     _TEMPORAL_IMPORT_ERROR: ImportError | None = None
 except ImportError as exc:
@@ -32,6 +34,8 @@ except ImportError as exc:
     _RetryPolicy = None
     _ApplicationError = None
     _TemporalWorker = None
+    _SandboxRestrictions = None
+    _SandboxedWorkflowRunner = None
     _TEMPORAL_IMPORT_ERROR = exc
 
 
@@ -239,6 +243,9 @@ async def _worker(*, address: str, namespace: str, task_queue: str, max_concurre
         workflows=[MoltApprovedRunWorkflow],
         activities=[molt_execute_activity],
         max_concurrent_activities=max_concurrent_activities,
+        workflow_runner=_SandboxedWorkflowRunner(
+            restrictions=_SandboxRestrictions.default.with_passthrough_modules("molt.temporal")
+        ),
     )
     await worker.run()
 

@@ -9,11 +9,11 @@
 | Full task follow-up: 0/5, 15 requests, 14 rejected recipes, 1 timeout | `gemma-full-task-followup.json` | Expanded fixtures, shorter prompt, 120s timeout; trial 3/4 outcome recovery disclosed |
 | Rejected model candidate only trims | `gemma-rung3-rejected-candidate.json` | Its own prose is not trusted as operation evidence |
 | Original 18/20 → expanded suite 20/20; correct control 11/11 | `verifier-catch-rate.json`, `verifier-catch-rate-after.json` | Exact inline mutations recovered; 15 fixture catches + 5 schema rejections |
-| Seed 41; four drift cases; 3 silent wrong outputs; 2 blocks/quarantines | `benchmark.json` | Naive baseline; renamed-column case correct for baseline but blocked by Molt |
+| Seed 41; four drift cases; 3 silent wrong outputs; 2 blocks/quarantines; 2/2 successful Molt outputs matched oracle | `benchmark.json` | Naive baseline; renamed-column case correct for baseline but blocked by Molt |
 | Historical approved repair 8/8 | `lifecycle.json` | Separate fixture-backed record, not proven live Gemma repair |
 | TabPFN: 300 holdout, TP52/FP3/TN225/FN20, precision94.55%, recall72.22% | `tabpfn-accuracy.json` | Synthetic, supervised, advisory; not real-world validation |
-| Temporal live: fixture recipe, four input rows, three outputs, zero model calls | `tabpfn-temporal-live.json` | Not Gemma-generated; not crash recovery proof |
-| Sentry implementation | No screenshot/evidence link | Inspected trace contained sensitive CSV values and local paths; intentionally omitted from the post; DSN rotation is a separate completed account action |
+| Temporal live plus crash/retry: fixture recipe, four input rows, three outputs, zero model calls; one injected failure, two attempts, checkpoint resumed | `tabpfn-temporal-live.json`, `temporal-crash-recovery.json` | Not Gemma-generated; local dev server/worker evidence, not production durability |
+| Sentry implementation | Screenshot pending local save | Root and child spans inspected; nine aggregate-only stages visible and no CSV values/prompts/responses/paths/credentials visible; DSN rotation is user-reported and not independently verifiable from the repository |
 | Offline demo without .env/network/credentials | `submission-checks.json` | Fresh temp workspace, existing Python installation; socket connects forbidden |
 
 The historical ladder and original 18/20 evidence were not overwritten. New

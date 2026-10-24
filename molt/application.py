@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import time
 from contextlib import closing
@@ -490,7 +491,9 @@ class MoltService:
             existing = connection.execute("SELECT id, status FROM execution_runs WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
         if existing:
             raise MoltError("DUPLICATE_FILE_EVENT", f"File was already recorded as run {existing['id']}.", details={"run_id": existing["id"], "status": existing["status"]})
-        checkpoint_done = bool(checkpoint_dir and (checkpoint_dir / "state.json").exists() and json.loads((checkpoint_dir / "state.json").read_text(encoding="utf-8")).get("status") == "done")
+        checkpoint_state = json.loads((checkpoint_dir / "state.json").read_text(encoding="utf-8")) if checkpoint_dir and (checkpoint_dir / "state.json").exists() else {}
+        checkpoint_done = bool(checkpoint_state.get("status") == "done")
+        checkpoint_resume = bool(checkpoint_state)
         if output.exists() and not checkpoint_done:
             raise MoltError("OUTPUT_WRITE_FAILED", "Output already exists; overwrite is disabled.")
         input_artifact = self._artifact(source, "input")
@@ -510,7 +513,9 @@ class MoltService:
                 raise MoltError("INPUT_LIMIT_EXCEEDED", "CSV exceeds the configured row limit.")
             with self.telemetry.span("automation.execute_approved_recipe", operation_count=len(active["recipe"].get("operations", [])), input_rows=len(rows), column_count=len(headers)) as execution_event:
                 if checkpoint_dir is not None:
-                    actual_headers, actual_rows, _ = execute_recipe_resumable(active["recipe"], headers, rows, checkpoint_dir, resume=checkpoint_done)
+                    crash_after = os.environ.get("MOLT_CRASH_AT")
+                    crash_step = int(crash_after) if crash_after and crash_after.isdigit() else None
+                    actual_headers, actual_rows, _ = execute_recipe_resumable(active["recipe"], headers, rows, checkpoint_dir, resume=checkpoint_resume, crash_after=crash_step)
                 else:
                     actual_headers, actual_rows = execute_recipe(active["recipe"], headers, rows)
                 self.telemetry.annotate(execution_event, output_rows=len(actual_rows))

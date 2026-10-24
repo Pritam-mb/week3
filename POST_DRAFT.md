@@ -1,181 +1,330 @@
-# Molt: teach once, test the recipe, reuse without another model call
+# I taught an AI a CSV chore once. Now it runs with zero model calls—and stops when the data changes.
 
 <!--
-PUBLISHING ATTACHMENT MAP
-1. Upload evidence/pipeline.png after the lifecycle paragraph below.
-2. Optional: upload a sanitized Molt dashboard screenshot at the dashboard slot
-   below. Leave it empty if any CSV values, prompts, responses, file paths,
-   credentials or account details are visible.
-3. Optional: upload a Temporal UI screenshot at the Temporal slot below only if
-   one was actually captured. Otherwise leave it empty; the JSON evidence is
-   sufficient for the narrower live-workflow claim.
-4. Do not upload Sentry screenshots: the inspected trace contained sensitive
-   CSV values and local paths.
-5. Do not look for a TabPFN dashboard screenshot: this was a local CPU run.
-   Use evidence/TABPFN_PROOF.md and evidence/tabpfn-accuracy.json instead.
+PUBLISHING NOTES — remove these comments before publishing.
+
+ATTACHMENT 1: upload evidence/pipeline.png after the lifecycle paragraph.
+It is a conceptual diagram, not a live dashboard screenshot.
+
+ATTACHMENT 2: optionally upload a fully sanitized live Threadwork dashboard
+screenshot after the demo section. Do not attach it if it shows CSV values,
+prompts, responses, local paths, credentials, or account details.
+
+ATTACHMENT 3: optionally upload a real Temporal UI screenshot after the Temporal
+paragraph. The JSON evidence is enough for the narrower claim if no UI capture
+exists.
+
+DO NOT attach Sentry screenshots. The inspected trace contained sensitive CSV
+values and local file paths. Sentry is implemented, but the trace is omitted.
+DO NOT look for a TabPFN dashboard screenshot. The evaluation ran locally on
+CPU with telemetry disabled; the proof is the code and aggregate evidence.
 -->
 
-Molt lets a local Gemma model propose a CSV recipe, but it does not trust the
-proposal to run unattended. Tests decide whether the candidate matches the
-expected output; an explicit approval gate comes next. In a live merchant-trim
-demo, the recipe passed six checks and its approved execution used **zero model
-calls**. That is the useful boundary: a model proposes the work; a deterministic
-program repeats it. [Live record](evidence/lifecycle.json)
+## TL;DR
 
-## First, the failure
+Molt turns a repeated CSV task into a **verified recipe**. A local Gemma model
+proposes constrained JSON. Independent checks decide whether that proposal is
+allowed to run. A person approves it. After that, compatible inputs run
+deterministically with **zero model calls**. When the input changes, Molt blocks
+the run and quarantines the file instead of guessing.
 
-One candidate described itself as trimming text, normalizing dates and parsing
-amounts. Its actual operation list contained **only trim**. The `golden_output`
-check rejected it. This is why the model's own explanation is not an approval
-summary. [Rejected candidate](evidence/gemma-rung3-rejected-candidate.json)
+The uncomfortable headline is the useful one: my local `gemma3:4b` model passed
+5/5 on a simple trimming task and passed **0/5 on the full expense task**. The
+full task still failed after a bounded follow-up: 0/5, 15 generation requests,
+one timeout, and 14 schema-valid candidates rejected by verification. Nothing
+was activated. [Full evidence](evidence/gemma-full-task-followup.json)
 
-The original local `gemma3:4b` task ladder used five trials per task:
+The other result is the reason I kept building: one approved recipe passed 6/6
+checks and later processed four rows with `llm_calls=0`. [Lifecycle evidence](evidence/lifecycle.json)
 
-| Task | First-request success | Success within its request budget | Request budget |
-|---|---:|---:|---:|
-| Trim merchant | 5/5 | 5/5 | 5 |
-| Trim + dates | 4/5 | 5/5 | 5 |
-| Trim + dates + decimals | 3/5 | 4/5 | 5 |
-| Full expense task | 0/5 | 0/5 | 3 |
+## What I built
 
-The original full-task trials all ended in timeouts. Nothing was activated by
-that measurement. These are observed task trials with verified feedback retries,
-not an unbiased statistical pass@k estimate. Budgets differed: the first three
-rungs used a 45-second request timeout; the last used 30 seconds. Repeated
-temperature-zero tasks on one machine are not evidence of general reliability.
-[Table and individual records](evidence/gemma-ladder.csv)
+CSV cleanup is a good place to be suspicious of AI. The operations are usually
+boring: trim a text column, parse dates, normalize amounts, map a category,
+deduplicate by an explicit key. But the export can change while the script keeps
+running.
 
-### One bounded follow-up, then stop
+A renamed column can make a positional script produce a plausible-looking file.
+A new category can be preserved when it should have stopped the run. A missing
+required field can turn a real problem into a successful process exit.
 
-I kept Gemma warm, shortened the prompt and raised the request timeout to 120
-seconds. Five more trials, at most three requests each, still produced **0/5
-passes**: **15 generation requests, one timeout, fourteen schema-valid recipes
-rejected by verification**. Nothing was activated. This follow-up also used the
-expanded verifier, so it is not an apples-to-apples model improvement score.
-Two report writes were interrupted by Windows file locks; their verification
-outcomes were recovered from SQLite, with total latency marked unavailable.
-Staged compilation is a next step, not a feature quietly added before publishing.
-[Separate follow-up record](evidence/gemma-full-task-followup.json)
+The rule behind Molt is simple:
 
-## One lifecycle, two kinds of evidence
+> **A recipe never runs until independent checks approve it, and data the recipe does not recognize is not guessed at.**
 
-**Teach → Gemma proposes → tests decide → human approval gate → zero-call reuse
-→ drift blocked → verified repair.**
+Molt stores the recipe as readable JSON over a fixed operation allowlist. The
+model does not write Python or arbitrary executable code. The runtime checks the
+input contract, verifies the candidate against expected outputs and invariants,
+then waits for explicit approval.
 
-The live trim recipe passed 6/6 checks, was activated by the demo script's explicit
-approval call, then processed four rows with `llm_calls=0`. The saved execution
-duration was 157.45 ms; that is one measurement, not a performance guarantee.
-The gate supports human review, but this scripted activation is not proof that
-an independent person reviewed the recipe.
+This is not an autonomous data agent. It is a boundary around a small model.
 
-Drift and repair evidence comes from separate fixture-backed runs, not one
-continuous Gemma-generated repair demonstration. A required-column failure
-blocked output, and a stored repair approval followed an 8/8 verification result.
-A successful live Gemma-generated repair is **not shown**.
-[Lifecycle records](evidence/lifecycle.json)
+## The demo
 
-![Molt lifecycle diagram, not a live dashboard screenshot](evidence/pipeline.png)
-
-<!-- DASHBOARD IMAGE SLOT: upload only a fully sanitized Molt dashboard image here. -->
-
-## The safety check needed checking too
-
-The original mutation experiment rejected **18/20** candidates. Two slipped
-through: deduplication on merchant instead of transaction ID happened to match
-the small examples, and preserving an unknown category was never exercised.
-
-I added independently authored examples: two distinct transactions sharing a
-merchant, and an unknown category that must raise `UNMAPPED_VALUE`. The exact
-original mutations were recovered from the session command and rerun. The old
-fixtures reproduce **18/20**; the expanded suite rejects **20/20**. The correct
-recipe still passes **11/11** checks.
-
-That count includes schema-invalid candidates: **15 fixture-verification
-failures and 5 schema rejections**, not twenty distinct semantic bugs caught by
-example tests. This is a finite regression result, not universal correctness.
-[Original](evidence/verifier-catch-rate.json) ·
-[Reproducible before/after](evidence/verifier-catch-rate-after.json)
-
-## What schema drift costs
-
-`python bench.py` uses seed 41, an independent answer key, and a deliberately
-naive positional script. It is not a comparison with every well-written script.
-
-| Change | Naive script | Molt |
-|---|---|---|
-| Renamed customer column | Correct output | Blocked + quarantined |
-| Dropped status column | Silent wrong output | Blocked + quarantined |
-| Reordered columns | Silent wrong output | Succeeded |
-| Extra column | Silent wrong output; drops extra field | Succeeded |
-
-Three silent wrong outputs versus two Molt blocks. The cost is visible too:
-Molt blocked the renamed-column case even though the positional script produced
-the right output. Strict contracts trade that convenience for explicit review.
-The successful Molt statuses are execution results; the benchmark does not yet
-compare their output files to its independent oracle. No money or electricity
-savings are inferred from these counts. [Benchmark](evidence/benchmark.json)
-
-## Two optional integrations, narrowly demonstrated
-
-**TabPFN:** a real CPU run performed supervised advisory classification on
-synthetic, rule-generated batch-profile features. Of 300 held-out examples,
-52 were true positives, 3 false positives, 225 true negatives and 20 false
-negatives. Precision was **94.55%**, recall **72.22%**. The model flagged 55
-examples and changed no source rows; source hashes matched before and after.
-This is not real-world drift validation or unlabeled anomaly detection.
-[Accuracy and provenance](evidence/tabpfn-accuracy.json) ·
-[Local proof note](evidence/TABPFN_PROOF.md)
-
-**Temporal:** a local server and worker completed a live workflow using the
-**checked-in fixture recipe and a four-row file**, with three output rows and
-zero model calls. The recipe was **not Gemma-generated**. This shows live
-workflow execution; worker-crash recovery and production durability were not
-demonstrated. [Workflow record](evidence/tabpfn-temporal-live.json)
-
-<!-- TEMPORAL IMAGE SLOT: optional actual Temporal UI screenshot; omit if unavailable. -->
-
-**Sentry:** telemetry is implemented, but the inspected live trace contained
-sensitive CSV values and local file paths. I therefore do not show the trace or
-claim sanitized dashboard evidence. The exposed DSN was rotated after review.
-
-<!-- Do not attach the Sentry screenshots. The trace is intentionally omitted. -->
-
-## Try the fixture demo
+The shortest local demo is:
 
 ```text
 python -m molt demo --offline --approve
 ```
 
-Use Python 3.11+ from the repository. The offline demo needs no Ollama, API
-credentials or network; it uses a checked-in recipe, not a live model.
+That command needs no Ollama, API key or network. It uses a **checked-in fixture
+recipe**, not a live Gemma-generated recipe. The offline submission check runs in
+a fresh temporary workspace with credentials removed from the child process and
+socket connections forbidden. It observed two successful runs and two blocked
+drift cases, all with zero model calls. [Submission check](evidence/submission-checks.json)
 
-## Why open and local matter
+The repository currently has a Threadwork dashboard: a task is shown as a
+thread, steps are beads, a live run sends a small bead along the line, and drift
+cuts the run lane instead of silently continuing. [Pipeline illustration](evidence/pipeline.png)
 
-Ollama runs the compiler locally. Recipes are readable JSON rather than
-arbitrary executable code, and the runtime can be inspected independently of
-the model. Once approved, compatible execution needs no inference provider.
-Optional telemetry and model-download authentication are separate boundaries;
-"local" does not mean every optional integration is network-free.
+<!-- ATTACHMENT SLOT: live Threadwork dashboard screenshot, only if fully sanitized. -->
 
-TabPFN code and weights have separate licenses. Recent TabPFN weights are
-**non-commercial**; check the selected checkpoint's terms before use or obtain
-the appropriate commercial permission. [Upstream licensing](https://github.com/PriorLabs/TabPFN#license)
+## How the boundary works
 
-## Limits and not shown
+```text
+profile input
+    -> Gemma proposes constrained JSON
+    -> schema validation
+    -> fixture outputs and invariants
+    -> explicit approval
+    -> deterministic execution, zero model calls
+    -> drift? block + quarantine
+    -> repair candidate
+    -> same verification suite + explicit approval
+```
 
-Molt rejects unapproved candidates and blocks incompatible inputs in the
-demonstrated service flow. It preserves sources and refuses existing output
-paths in that service, but the legacy offline demo is not proof of every
-overwrite-safety boundary. A wrong-but-passing recipe remains possible when
-fixtures are weak. A careless approval can still authorize bad behavior.
-Schema-valid data can be wrong, and no verifier here establishes business truth.
-Golden and held-out expected rows are not sent to the compiler, but retry
-feedback includes structural failures from those fixtures: they are development
-regression tests, not a sealed final evaluation set.
+The model is allowed to propose operations such as trimming, date parsing,
+decimal parsing, value mapping, deduplication and column selection. Unknown
+operations and invalid fields are rejected before fixture execution. Missing
+required columns block a run. Outputs are written atomically and the service
+does not overwrite an existing output path.
 
-Not shown: a successful live Gemma repair, a Temporal crash/restart exercise,
-and a Sentry trace screenshot. Sentry is implemented, but the inspected trace
-contained sensitive data, so it is intentionally omitted. Remaining screenshot
-and publication tasks are tracked in [the capture checklist](evidence/CAPTURE_CHECKLIST.md).
+The important part is not the prompt. It is the check that runs after the prompt:
 
-#devchallenge #hf26challenge
+```python
+recipe = validate_recipe(recipe)
+for input_path, expected_path in fixtures:
+    headers, rows = read_csv(input_path)
+    if expected_path.name.endswith(".error.json"):
+        expected = load_json(expected_path)["error_code"]
+        actual = None
+        try:
+            execute_recipe(recipe, headers, rows)
+        except MoltError as exc:
+            actual = exc.code
+        if actual != expected:
+            results.append({"status": "FAIL", "check": "expected_error"})
+```
+
+The real implementation also checks positive golden outputs, idempotence,
+column-order invariance, required-column guards and extra-column behavior. The
+snippet above is shortened for readability; it is not the whole verifier.
+
+## I measured the failure before trusting anything
+
+I compared Molt with an independently authored naive positional script. The
+script chooses fields by position, like a recorded macro. Molt uses named
+contracts and deterministic checks.
+
+The benchmark used four deliberately changed inputs with seed 41:
+
+| Case | Naive positional script | Molt |
+|---|---|---|
+| Renamed customer column | Produced output; accepted drift | Blocked and quarantined |
+| Dropped status column | Silent wrong output | Blocked and quarantined |
+| Reordered columns | Silent wrong output | Succeeded |
+| Extra column | Silent wrong output | Succeeded |
+
+That is **3 silent wrong outputs for the naive script and 0 for Molt** in this
+small benchmark. Molt blocked two cases; the naive script accepted two drift
+cases without validation. The renamed-column case is an important cost: the
+naive output happened to match the independent oracle, but Molt still refused
+to run because the approved contract no longer matched the input.
+
+The two successful Molt output files also matched the independent oracle in this
+run. This is still not a claim of universal correctness, and the benchmark does
+not estimate money, electricity or maintenance cost.
+[Benchmark evidence](evidence/benchmark.json)
+
+## Gemma: where a 4B model works—and where it stops
+
+The ladder used `gemma3:4b` through Ollama on my laptop. Each rung had five
+trials. The first three rungs used a 45-second request timeout; the full task
+used a 30-second timeout and a different request budget. These are observed
+task trials from live local Ollama calls, not checked-in fixture replay or an
+unbiased pass@k estimate.
+
+| Task | First request | Within configured retries |
+|---|---:|---:|
+| Trim merchant | 5/5 | 5/5 |
+| Trim + dates | 4/5 | 5/5 |
+| Trim + dates + decimals | 3/5 | 4/5 |
+| Full expense task | 0/5 | 0/5 |
+
+The full-task result is not buried: all five original trials timed out before a
+candidate could be activated. I then made one bounded follow-up. I kept the
+model warm, shortened the prompt, expanded the verifier fixtures and raised the
+request timeout to 120 seconds. The result was still **0/5**. Across the five
+trials there were 15 generation requests, one timeout and 14 schema-valid
+candidates rejected by verification. Nothing was activated.
+
+That is the verifier doing its job, not a model success hidden behind a pretty
+UI. The follow-up is not directly comparable to the original rung because its
+timeout, prompt and fixtures changed. Two report writes failed because of
+Windows file locks; those outcomes were recovered from existing SQLite records
+without repeating model calls, and total latency for those trials is left
+unavailable. Staged clause-by-clause compilation is next. It is not implemented
+in this submission.
+
+### The signature failure
+
+One candidate described itself as trimming text, normalizing dates and parsing
+amounts. Its actual operation list contained only `trim`. The candidate's prose
+was more ambitious than its executable recipe. The `golden_output` check rejected
+it, and it was never approved. [Rejected candidate](evidence/gemma-rung3-rejected-candidate.json)
+
+That changed how I read model output: the explanation is not the contract. The
+JSON is not the contract either until the independent checks pass.
+
+## Did the tests catch bad recipes?
+
+The original mutation experiment caught **18 of 20** deliberately wrong
+recipes. Two mutations slipped through because the examples were too weak:
+
+- a wrong deduplication key happened to match the small original examples;
+- preserving an unknown category was never exercised.
+
+I added two targeted fixtures after seeing those misses: two distinct
+transactions sharing a merchant, and an unknown category with an expected
+`UNMAPPED_VALUE` error. I then reran the **same 20 mutations**. The expanded
+suite rejected 20/20: 15 reached fixture verification and 5 were rejected by
+schema validation. The correct recipe still passed all 11/11 checks.
+
+This is not an unseen evaluation set and not a claim that the verifier catches
+every possible bad recipe. It is a finite regression result, with the fixture
+improvement disclosed in the result itself. [Before/after evidence](evidence/verifier-catch-rate-after.json)
+
+## When the data changes
+
+The live lifecycle is the part I wanted the model to support without allowing it
+to become the final authority:
+
+1. A `gemma3:4b` candidate was created.
+2. The candidate passed 6/6 checks.
+3. A scripted approval activated it.
+4. A compatible four-row input ran with zero model calls.
+5. A drifted input was blocked with `REQUIRED_COLUMN_MISSING`.
+6. No rows were written and quarantine was observed.
+7. A repair candidate failed a 6-check verification and stayed rejected.
+8. A separate repair candidate passed 8/8 checks and was explicitly approved.
+
+The drift block, rejected repair and approved repair are recorded lifecycle
+events. They are not one continuous live Gemma repair video. A successful live
+Gemma-generated repair is not shown. [Lifecycle record](evidence/lifecycle.json)
+
+<!-- ATTACHMENT SLOT: sanitized live dashboard screenshot, if one exists. -->
+
+## Temporal and TabPFN: what I can actually prove
+
+**Temporal.** A local Temporal server and worker completed a live workflow with
+11 history events, four rows read, three rows written and zero model calls. It
+used the checked-in fixture recipe, not a Gemma-generated recipe. I then ran a
+second local workflow with `MOLT_CRASH_AT=1`: the first activity attempt failed
+after checkpointing step 1, Temporal retried it, and the second attempt resumed
+from the checkpoint and completed. This is real local retry/resume evidence, not
+a claim of production durability. [Basic live workflow](evidence/tabpfn-temporal-live.json) · [Crash/retry evidence](evidence/temporal-crash-recovery.json)
+
+<!-- ATTACHMENT SLOT: real Temporal UI screenshot, only if captured. -->
+
+**TabPFN.** This was a local CPU run, not a hosted TabPFN dashboard. The data
+was synthetic, supervised and labeled by rules I wrote. I used 1,200 training
+rows and 300 held-out rows. On the held-out set, TabPFN produced 52 true
+positives, 3 false positives, 225 true negatives and 20 false negatives:
+
+- precision: **94.55%**;
+- recall: **72.22%**;
+- 20 of 72 positive examples missed;
+- 55 rows flagged;
+- 0 source rows changed; hashes before and after were identical.
+
+This is advisory triage, not real-world validation or unlabeled anomaly
+detection. It does not prove production value. [Accuracy evidence](evidence/tabpfn-accuracy.json) · [Proof note](evidence/TABPFN_PROOF.md)
+
+**Sentry.** Tracing is implemented with an allowlist intended to export
+aggregate stage data. I inspected the root transaction and child spans of a
+live Molt workflow trace: it showed the nine expected stages, timings and
+generic status attributes, with no CSV values, prompts, model responses, local
+paths or credentials visible. The exposed DSN was reported rotated after
+review; account-side rotation is not independently verifiable from this
+repository. Attach the clean trace screenshot manually if submitting the Sentry
+category; the repository copy is intentionally not included until that image is
+saved locally. [Capture boundary](evidence/CAPTURE_CHECKLIST.md)
+
+## What I got wrong
+
+The project became useful because the mistakes stayed visible.
+
+- Gemma returned the wrong operation shape, such as a singular `trim.column`
+  where the schema required `trim.columns`.
+- Some proposals omitted identity mappings, so valid values failed verification.
+- Some proposals added operations nobody asked for, including extra casing.
+- The full expense task timed out five times, then failed again in the bounded
+  follow-up.
+- The first verifier score was 18/20 because the fixture set did not exercise
+  the wrong dedupe key or unknown-category policy.
+- A file-lock failure interrupted two follow-up report writes. The results were
+  recovered from SQLite without rerunning calls, and the missing latency was not
+  invented.
+
+The moment I nearly trusted was the candidate whose prose claimed three kinds
+of transformation while its operation list contained one. A model can be
+confidently wrong in both directions: it can omit required work or invent work
+that sounds reasonable. The approval boundary exists for exactly that reason.
+
+## Why open and local matters
+
+The compiler uses a local open-weight Gemma model through Ollama. The recipe is
+plain JSON that can be read, diffed and versioned. The runtime does not need a
+model call for compatible execution.
+
+That does not mean every part of the project is offline. Model downloads and
+optional telemetry have their own network and credential boundaries. TabPFN was
+run locally with telemetry disabled, but its selected weights have separate
+licensing terms. Check those terms before commercial use. The project does not
+claim that local inference makes every integration network-free.
+
+## The lazy payoff—and the limit
+
+The measured payoff here is not a promise of cost savings. It is a change in the
+failure mode: after approval, compatible runs reuse the recipe without another
+inference call; incompatible inputs stop before writing output.
+
+No one else has used Molt yet. The current evidence is a local demonstration,
+regression measurement and integration exercise—not user validation.
+
+Molt is still limited:
+
+- CSV workflows and a fixed operation set;
+- human approval required for recipes and repairs;
+- full expense compilation is not reliable with this 4B model;
+- fixture quality still determines what verification can catch;
+- Temporal recovery was demonstrated locally with one injected activity failure,
+  but not under a production deployment;
+- the Sentry trace is intentionally not published because it contained
+  sensitive data.
+
+## Challenge categories
+
+- **Best Use of Gemma:** local ladder, rejected candidates, verified approval
+  boundary and zero-call reuse. The weakest full-task result is included.
+- **Best Use of Temporal:** narrow live workflow claim only: checked-in fixture
+  recipe, four-row input, three output rows and zero model calls.
+- **Best Use of TabPFN:** synthetic supervised advisory evaluation with the full
+  confusion matrix and limitations stated.
+- **Sentry:** tracing is implemented, but I am not claiming a clean trace or
+  submitting a dashboard screenshot.
+
+The point of Molt is not that the model is always right. It is that the model
+does not get the last word.
+
+#devchallenge #hf26challenge #ai #opensource

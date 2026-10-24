@@ -141,6 +141,21 @@ class AnomalyAnalyzer:
         return result
 
     @staticmethod
+    def public_result(result: dict[str, Any]) -> dict[str, Any]:
+        """Return an aggregate-only API response for dashboard consumers.
+
+        The internal analyzer retains redacted flagged-row details for local
+        callers and tests. The HTTP boundary never exposes those payloads.
+        """
+        allowed = {
+            "status", "code", "eligible", "advisory_only", "rows_changed",
+            "source_preserved", "warning", "readiness", "reason", "error_type",
+            "method", "target", "features", "split", "threshold", "rows_scored",
+            "rows_flagged", "holdout_metrics", "limitations",
+        }
+        return {key: result[key] for key in allowed if key in result}
+
+    @staticmethod
     def _numeric_columns(headers: list[str], rows: list[dict[str, str]], excluded: set[str]) -> list[str]:
         columns: list[str] = []
         for column in headers:

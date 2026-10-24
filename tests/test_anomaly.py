@@ -231,6 +231,8 @@ class AnomalyAnalyzerTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(payload["status"], "COMPLETE")
         self.assertEqual(payload["advisory_only"], True)
+        self.assertNotIn("flagged_rows", payload)
+        self.assertNotIn("row_number", json.dumps(payload))
 
 
 if __name__ == "__main__":

@@ -52,9 +52,12 @@ zero.
   reuse, drift block/quarantine, and an approved verified repair. It contains
   IDs and counts only.
 - `benchmark.json` — fixed-seed naive positional baseline and Molt drift
-  measurement.
+  measurement, including independent-oracle comparisons for successful outputs.
 - `tabpfn-temporal-live.json` — sanitized live TabPFN supervised advisory
   inference and live Temporal workflow evidence.
+- `temporal-crash-recovery.json` — real local Temporal server/worker workflow
+  with one injected activity failure, two activity attempts and checkpoint
+  resume; not a production durability claim.
 
 ## Claim boundary
 

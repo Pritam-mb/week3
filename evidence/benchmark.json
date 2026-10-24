@@ -1,92 +1,131 @@
 {
-  "claim_boundary": "Call avoidance is an inference proxy, not measured electricity savings. Cost is not estimated.",
-  "command": "python bench.py",
-  "molt_drift": {
-    "blocked_count": 2,
-    "cases": [
-      {
-        "error_code": "REQUIRED_COLUMN_MISSING",
-        "name": "renamed_customer_column",
-        "status": "BLOCKED_DRIFT"
-      },
-      {
-        "error_code": "REQUIRED_COLUMN_MISSING",
-        "name": "dropped_status_column",
-        "status": "BLOCKED_DRIFT"
-      },
-      {
-        "error_code": null,
-        "name": "reordered_columns",
-        "status": "SUCCEEDED"
-      },
-      {
-        "error_code": null,
-        "name": "extra_column",
-        "status": "SUCCEEDED"
-      }
-    ],
-    "quarantined_count": 2,
-    "seed": 41,
-    "status": "MEASURED",
-    "succeeded_count": 2
-  },
-  "naive_positional_script": {
-    "case_count": 4,
-    "cases": [
-      {
-        "accepted_drift": true,
-        "description": "Customer Name was renamed without an approved recipe change.",
-        "error": null,
-        "expected_molt_status": "BLOCKED_DRIFT",
-        "matches_independent_oracle": true,
-        "name": "renamed_customer_column",
-        "silent_wrong_output": false,
-        "status": "PRODUCED"
-      },
-      {
-        "accepted_drift": true,
-        "description": "The required status column was removed.",
-        "error": null,
-        "expected_molt_status": "BLOCKED_DRIFT",
-        "matches_independent_oracle": false,
-        "name": "dropped_status_column",
-        "silent_wrong_output": true,
-        "status": "PRODUCED"
-      },
-      {
-        "accepted_drift": false,
-        "description": "Required columns were reordered; names still identify them.",
-        "error": null,
-        "expected_molt_status": "SUCCEEDED",
-        "matches_independent_oracle": false,
-        "name": "reordered_columns",
-        "silent_wrong_output": true,
-        "status": "PRODUCED"
-      },
-      {
-        "accepted_drift": false,
-        "description": "An unrelated region column was added.",
-        "error": null,
-        "expected_molt_status": "SUCCEEDED",
-        "matches_independent_oracle": false,
-        "name": "extra_column",
-        "silent_wrong_output": true,
-        "status": "PRODUCED"
-      }
-    ],
+  "recorded_at": "2026-10-24T10:49:13.521837+00:00",
+  "baseline": "one model call per comparable file",
+  "comparable_files": 2,
+  "repeated_llm_baseline": {
+    "calls_assumed": 2,
+    "status": "declared comparison; live model calls require --model",
+    "model_calls_made": 0,
     "cost": {
+      "status": "not_estimated",
       "amount_usd": null,
-      "reason": "The benchmark has no defensible script-maintenance or provider price estimate; it reports behavior and measured latency only.",
-      "status": "not_estimated"
-    },
-    "drift_cases_accepted_without_validation": 2,
-    "implementation": "independently_authored_naive_positional_script",
-    "latency_ms": {
-      "mean": 0.009,
-      "samples": 4
-    },
-    "seed": 41,
-    "silent_wrong_outputs": 3
+      "reason": "No provider price was supplied; offline fixture mode makes no live model call and live token pricing is not inferred."
+    }
   },
-  "recorded_at": "2026-10-23T15:59:13.458703+00:00"
+  "fixed_script_baseline": {
+    "status": "not used as the primary claim",
+    "note": "A manually maintained script is a deterministic engineering comparison, not the repeated-inference comparison."
+  },
+  "baseline_calls": 2,
+  "deterministic_execution_calls": 0,
+  "steady_state_calls_avoided": 2,
+  "generation": {
+    "mode": "offline_fixture",
+    "generation_calls": 0,
+    "model": null
+  },
+  "deterministic_latency_ms": {
+    "samples": 2,
+    "mean": 1.722
+  },
+  "naive_positional_script_baseline": {
+    "implementation": "independently_authored_naive_positional_script",
+    "seed": 41,
+    "cases": [
+      {
+        "name": "renamed_customer_column",
+        "description": "Customer Name was renamed without an approved recipe change.",
+        "status": "PRODUCED",
+        "error": null,
+        "matches_independent_oracle": true,
+        "silent_wrong_output": false,
+        "accepted_drift": true,
+        "expected_molt_status": "BLOCKED_DRIFT"
+      },
+      {
+        "name": "dropped_status_column",
+        "description": "The required status column was removed.",
+        "status": "PRODUCED",
+        "error": null,
+        "matches_independent_oracle": false,
+        "silent_wrong_output": true,
+        "accepted_drift": true,
+        "expected_molt_status": "BLOCKED_DRIFT"
+      },
+      {
+        "name": "reordered_columns",
+        "description": "Required columns were reordered; names still identify them.",
+        "status": "PRODUCED",
+        "error": null,
+        "matches_independent_oracle": false,
+        "silent_wrong_output": true,
+        "accepted_drift": false,
+        "expected_molt_status": "SUCCEEDED"
+      },
+      {
+        "name": "extra_column",
+        "description": "An unrelated region column was added.",
+        "status": "PRODUCED",
+        "error": null,
+        "matches_independent_oracle": false,
+        "silent_wrong_output": true,
+        "accepted_drift": false,
+        "expected_molt_status": "SUCCEEDED"
+      }
+    ],
+    "case_count": 4,
+    "silent_wrong_outputs": 3,
+    "drift_cases_accepted_without_validation": 2,
+    "latency_ms": {
+      "samples": 4,
+      "mean": 0.01
+    },
+    "cost": {
+      "status": "not_estimated",
+      "amount_usd": null,
+      "reason": "The benchmark has no defensible script-maintenance or provider price estimate; it reports behavior and measured latency only."
+    }
+  },
+  "molt_drift_measurement": {
+    "status": "MEASURED",
+    "seed": 41,
+    "cases": [
+      {
+        "name": "renamed_customer_column",
+        "status": "BLOCKED_DRIFT",
+        "error_code": "REQUIRED_COLUMN_MISSING",
+        "matches_independent_oracle": null
+      },
+      {
+        "name": "dropped_status_column",
+        "status": "BLOCKED_DRIFT",
+        "error_code": "REQUIRED_COLUMN_MISSING",
+        "matches_independent_oracle": null
+      },
+      {
+        "name": "reordered_columns",
+        "status": "SUCCEEDED",
+        "error_code": null,
+        "matches_independent_oracle": true
+      },
+      {
+        "name": "extra_column",
+        "status": "SUCCEEDED",
+        "error_code": null,
+        "matches_independent_oracle": true
+      }
+    ],
+    "blocked_count": 2,
+    "quarantined_count": 2,
+    "succeeded_count": 2,
+    "successful_output_oracle_matches": 2,
+    "successful_output_oracle_mismatches": 0
+  },
+  "cost_reporting": {
+    "status": "not_estimated",
+    "currency": "USD",
+    "estimated_total_usd": null,
+    "reason": "No defensible provider or script-maintenance price was configured. Call counts and measured latency are reported without converting them to money or energy savings."
+  },
+  "claim_boundary": "Call avoidance is an inference proxy, not measured electricity savings."
 }

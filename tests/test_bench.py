@@ -47,6 +47,8 @@ class TierA4BenchmarkTests(unittest.TestCase):
             [case["status"] for case in report["cases"]],
             ["BLOCKED_DRIFT", "BLOCKED_DRIFT", "SUCCEEDED", "SUCCEEDED"],
         )
+        self.assertEqual(report["successful_output_oracle_matches"], 2)
+        self.assertEqual(report["successful_output_oracle_mismatches"], 0)
 
 
 if __name__ == "__main__":

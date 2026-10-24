@@ -149,13 +149,14 @@ class MoltHandler(BaseHTTPRequestHandler):
             if len(parts) == 4 and parts[:2] == ["api", "automations"] and parts[3] == "tests":
                 return self._send(self.service.add_fixture(parts[2], body["input_path"], body["expected_path"], name=body.get("name", "user-example"), oracle_source=body.get("oracle_source", "human_authored")), 201)
             if len(parts) == 4 and parts[:2] == ["api", "automations"] and parts[3] == "anomaly-analysis":
-                return self._send(self.service.anomaly_analysis(
+                result = self.service.anomaly_analysis(
                     body.get("path") or body.get("input_reference"),
                     label_column=body.get("label_column"),
                     anomaly_label=body.get("anomaly_label"),
                     feature_columns=body.get("feature_columns"),
                     test_fraction=float(body.get("test_fraction", 0.25)),
-                ))
+                )
+                return self._send(self.service.anomaly.public_result(result))
             if len(parts) == 4 and parts[:2] == ["api", "automations"] and parts[3] == "approve":
                 automation = self.service.get_automation(parts[2])
                 candidate = automation.get("candidate")

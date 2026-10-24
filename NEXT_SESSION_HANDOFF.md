@@ -26,6 +26,38 @@ natural-language task
 
 Orders and expense CSVs are examples, not hard-coded product types.
 
+## Full-fledge integration pass — 2026-10-24
+
+The user asked to strengthen the real integration path rather than present
+fixture-only claims. Completed locally:
+
+- Temporal checkpoint recovery now resumes an interrupted service run when a
+  worker retry re-enters the activity. `MOLT_CRASH_AT=1` injects a one-shot
+  failure after checkpoint step 1; the retry sees the running checkpoint and
+  continues instead of restarting from step 0. The Temporal worker is configured
+  to pass through `molt.temporal` safely in the SDK workflow sandbox.
+- `temporal_crash_recovery.py` starts a real local Temporal dev server and worker,
+  runs the actual Molt workflow, injects one activity failure, observes two
+  activity attempts and checkpoint resume, then writes aggregate-only
+  `evidence/temporal-crash-recovery.json`.
+- The drift benchmark now compares successful Molt output files against its
+  independent oracle. The fixed-seed run records 2/2 successful output matches,
+  3 naive silent wrong outputs and 2 Molt blocks/quarantines.
+- The HTTP TabPFN route now returns aggregate-only results and never exposes its
+  internal flagged-row payloads. Local TabPFN inference remains real CPU
+  inference on synthetic supervised labels, not a hosted dashboard or real-world
+  validation.
+- Current checks: `python -m pytest -q` → 67 passed, one unrelated `cgi`
+  deprecation warning; `python bench.py` → 2/2 oracle matches; Temporal crash
+  evidence script → COMPLETE; offline submission check → PASS; compileall and
+  `node --check molt/web/app.js` → PASS.
+
+Remaining external/manual work: privately classify the credential-shaped matches
+in `workflow.txt` and old `.env.example`; perform any provider revocation; take
+live light/dark dashboard screenshots; run a true fresh-clone check; get one
+outside reader's one-sentence summary; and use the DEV publishing preview. Do
+not claim those are complete from local tests.
+
 The final brief says:
 
 - CSV only for the MVP;

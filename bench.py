@@ -8,6 +8,7 @@ import statistics
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -232,7 +233,15 @@ def measure_molt_drift_cases(recipe: dict[str, Any], seed: int = DRIFT_SEED) -> 
             input_path = config.input_dir / f"{case.name}.csv"
             _write_case(input_path, case.headers, case.rows)
             result = service.run(automation["id"], input_path, baseline_calls=1)
-            results.append({"name": case.name, "status": result["status"], "error_code": result.get("error_code")})
+            matches_oracle = False
+            if result["status"] == "SUCCEEDED" and result.get("output"):
+                actual_headers, actual_rows = read_csv(Path(result["output"]))
+                matches_oracle = (
+                    case.expected_headers is not None
+                    and tuple(actual_headers) == case.expected_headers
+                    and tuple(actual_rows) == case.expected_rows
+                )
+            results.append({"name": case.name, "status": result["status"], "error_code": result.get("error_code"), "matches_independent_oracle": matches_oracle if result["status"] == "SUCCEEDED" else None})
         quarantine_count = len(list(config.quarantine_dir.glob("*.csv")))
     blocked_count = sum(result["status"] == "BLOCKED_DRIFT" for result in results)
     return {
@@ -242,6 +251,8 @@ def measure_molt_drift_cases(recipe: dict[str, Any], seed: int = DRIFT_SEED) -> 
         "blocked_count": blocked_count,
         "quarantined_count": quarantine_count,
         "succeeded_count": sum(result["status"] == "SUCCEEDED" for result in results),
+        "successful_output_oracle_matches": sum(result.get("matches_independent_oracle") is True for result in results),
+        "successful_output_oracle_mismatches": sum(result.get("matches_independent_oracle") is False for result in results),
     }
 
 
@@ -265,6 +276,7 @@ def main() -> int:
     naive_baseline = run_naive_positional_baseline()
     molt_drift = measure_molt_drift_cases(recipe)
     report = {
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
         "baseline": "one model call per comparable file",
         "comparable_files": len(durations),
         "repeated_llm_baseline": {
@@ -296,6 +308,7 @@ def main() -> int:
         },
         "claim_boundary": "Call avoidance is an inference proxy, not measured electricity savings.",
     }
+    (ROOT / "evidence" / "benchmark.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
     return 0
 
