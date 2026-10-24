@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from molt.application import MoltService
@@ -50,6 +52,37 @@ class ApplicationFlowTests(unittest.TestCase):
             self.assertEqual(good_result["status"], "VERIFIED")
             active = service.approve_repair(good["id"])
             self.assertEqual(active["status"], "APPROVED")
+
+    def test_mastra_repair_sidecar_returns_candidate_without_bypassing_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            service = MoltService(MoltConfig(Path(directory), mastra_repair_url="http://mastra.test"))
+            source = Path(directory) / "orders.csv"
+            drift = Path(directory) / "orders-drift.csv"
+            shutil.copy2(ROOT / "examples/orders_input.csv", source)
+            shutil.copy2(ROOT / "examples/orders_drift_unknown_status.csv", drift)
+            automation = service.create_automation("Orders Mastra", "Repair order statuses")
+            version = service.generate_candidate(automation["id"], "Normalize orders", service.profile(source), recipe_file=str(ROOT / "examples/recipes/orders-v1.json"))
+            self.assertEqual(service.verify_version(version["id"])["status"], "PASS")
+            service.approve_version(version["id"])
+            blocked = service.run(automation["id"], drift)
+            good_recipe = load_json(ROOT / "examples/recipes/orders-good-repair.json")
+
+            class FakeResponse:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+                def read(self, _limit):
+                    return json.dumps({"status": "PROPOSED", "recipe": good_recipe, "reason": "Add the observed status mapping", "model": "mastra/test", "trace_id": "trace-test"}).encode()
+
+            with patch("molt.application.urlopen", return_value=FakeResponse()):
+                proposal = service.propose_repair(automation["id"], blocked["id"], model="mastra/test")
+
+            self.assertEqual(proposal["status"], "PROPOSED")
+            self.assertEqual(proposal["candidate"]["provider_metadata"]["provider"], "mastra")
+            self.assertEqual(service.verify_repair(proposal["id"])["status"], "VERIFIED")
 
     def test_sqlite_lifecycle_run_drift_and_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

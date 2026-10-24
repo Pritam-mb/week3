@@ -93,6 +93,10 @@
       steps: operations.map((operation) => L(operation.operation || operation.type || operation.name, "step")).slice(0, 6),
       checks,
       rawStatus: version.status,
+      recipe,
+      description: recipe.description || "",
+      provider: version.provider_metadata?.provider || version.model_name || "stored recipe",
+      verification,
     };
   }
 
@@ -104,6 +108,7 @@
       calls: number(run.llm_calls ?? run.model_calls, 0),
       ver: run.recipe_version_id || run.version_id || run.recipe_version,
       ms: run.duration_ms ?? run.latency_ms,
+      duration: number(run.duration_ms ?? run.latency_ms, 0),
       at: run.started_at || run.created_at,
       input: run.input,
       output: run.output,
@@ -230,8 +235,23 @@
     const calls = state.runs.reduce((sum, run) => sum + run.calls, 0);
     const blocked = state.runs.filter((run) => run.status === "BLOCKED_DRIFT").length;
     const succeeded = state.runs.filter((run) => run.status === "SUCCEEDED").length;
-    $("#calls-number").textContent = String(calls);
-    $("#calls-caption").textContent = `${succeeded} successful run${succeeded === 1 ? "" : "s"} · ${blocked} drift block${blocked === 1 ? "" : "s"} · ${state.runs.length} total runs`;
+    const total = state.runs.length;
+    const callsNum = $("#calls-number");
+    if (callsNum) callsNum.textContent = String(calls);
+    const callsCap = $("#calls-caption");
+    if (callsCap) callsCap.textContent = `${succeeded} successful run${succeeded === 1 ? "" : "s"} · ${blocked} drift block${blocked === 1 ? "" : "s"} · ${total} total runs`;
+
+    const bentoSuccess = $("#bento-successful-runs");
+    if (bentoSuccess) bentoSuccess.textContent = total ? String(succeeded) : "Not measured";
+    const bentoDrift = $("#bento-drift-events");
+    if (bentoDrift) bentoDrift.textContent = total ? String(blocked) : "Not measured";
+    const bentoAvoided = $("#bento-calls-avoided");
+    if (bentoAvoided) bentoAvoided.textContent = total ? String(state.runs.filter((run) => run.status === "SUCCEEDED" && run.calls === 0).length) : "Not measured";
+    const bentoLatency = $("#bento-latency");
+    if (bentoLatency) {
+      const measured = state.runs.filter((run) => run.status === "SUCCEEDED" && run.duration > 0);
+      bentoLatency.textContent = measured.length ? `${Math.round(measured.reduce((sum, run) => sum + run.duration, 0) / measured.length)} ms` : "Not measured";
+    }
   }
 
   function node(label, tone, explanation, model = false) {
@@ -254,15 +274,78 @@
     const candidate = state.versions.some((version) => version.state === "candidate");
     const blocked = state.runs.some((run) => run.status === "BLOCKED_DRIFT");
     const latest = state.runs[0];
+    const repairPending = state.repairs.some((repair) => ["PROPOSED", "VERIFIED"].includes(repair.status));
     const steps = [
-      ["01", "Profile input", "Schema + masked samples", true],
-      ["02", "Compile recipe", "Gemma proposes JSON", candidate || active],
-      ["03", "Verify + approve", candidate ? "Candidate needs review" : active ? "Active version" : "Tests decide", active ? true : candidate],
-      ["04", "Run deterministically", latest ? `${latest.calls} model calls` : "Zero calls after approval", latest?.status === "SUCCEEDED" || active],
-      ["05", blocked ? "Drift blocked" : "Repair if needed", blocked ? "Quarantine; never guess" : "Only after a mismatch", blocked ? "blocked" : true],
+      ["Profile input", "The CSV is inspected for columns, types, row count, and fingerprints. Raw rows are not sent to the model.", active || candidate, "Done", "Compile can use the structural profile."],
+      ["Compile recipe", "Gemma proposes constrained JSON operations. It does not write Python or change the CSV.", candidate || active, candidate ? "Candidate" : active ? "Completed" : "Waiting", "The candidate must pass independent tests."],
+      ["Verify recipe", candidate ? "The candidate is tested against golden outputs, errors, and invariants." : active ? "The active recipe already passed its regression suite." : "No candidate has been created yet.", candidate ? "Review" : active ? "Passed" : "Waiting", "A failed candidate stays inactive."],
+      ["Human approval", active ? "A person approved the verified recipe, so it is the active version." : "A person reviews the recipe and explicitly approves it after tests pass.", active ? "Approved" : candidate ? "Action needed" : "Waiting", "Only an approved recipe can run."],
+      ["Run deterministically", latest ? `${latest.calls} model calls were recorded during this run.` : "The approved recipe is reused without another model call.", latest ? "Recorded" : "Waiting", "Compatible input produces an atomic output."],
+      ["Drift blocked", blocked ? "The input no longer matches the approved contract. No output is written and the file is quarantined." : "This step appears only when a file changes in an unapproved way.", blocked ? "Blocked" : "Not triggered", "Select the blocked run to open the repair path."],
+      ["Mastra repair proposal", repairPending ? "Mastra returned a candidate, but it is not active." : "Only request this after a blocked run. Mastra suggests; Molt still decides.", repairPending ? "Candidate stored" : blocked ? "Ready" : "Waiting", "Next: run the full regression suite."],
     ];
-    $("#journey-graph").innerHTML = steps.map(([numberValue, title, detail, tone]) => `<div class="journey-step ${tone === "blocked" ? "blocked" : tone ? "active" : ""}"><span class="journey-icon">${tone === "blocked" ? "×" : tone ? "✓" : numberValue}</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(detail)}</small></div>`).join("");
+    $("#journey-graph").innerHTML = steps.map(([title, detail, done, statusText, next], index) => `<button class="lifecycle-step ${statusText === "Blocked" ? "blocked" : done ? "done" : ""}" type="button" aria-expanded="false"><span class="lifecycle-dot"></span><strong>${escapeHTML(title)}</strong><span class="lifecycle-status">${escapeHTML(statusText)}</span><span class="lifecycle-evidence"><span class="lifecycle-detail"><b>What happens</b><span>${escapeHTML(detail)}</span></span><span class="lifecycle-detail"><b>Result</b><span>${escapeHTML(statusText)}</span></span><span class="lifecycle-detail"><b>What happens next</b><span>${escapeHTML(next)}</span></span></span></button>`).join("");
     $("#journey-caption").textContent = selected ? `${selected.name} · ${blocked ? "latest file was blocked" : active ? "approved recipe ready" : "start by creating a recipe"}` : "Create an automation to begin";
+  }
+
+  function renderBeads() {
+    const target = $("#run-beads");
+    if (!target) return;
+    if (!state.runs.length) { target.innerHTML = `<span class="empty-state">No runs yet.</span>`; $("#result-sentence").textContent = "No runs yet. Run a compatible CSV to create evidence."; return; }
+    const activeVersion = state.versions.find((version) => version.state === "active");
+    target.innerHTML = `${activeVersion ? `<div class="version-divider">v${escapeHTML(activeVersion.v)} active</div>` : ""}${state.runs.map((run, index) => `<button class="run-bead ${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}" type="button" data-run-id="${escapeHTML(run.id)}" aria-label="${escapeHTML(run.status)} run ${index + 1}"><i></i><span>run ${index + 1}</span></button>`).join("")}`;
+    const latest = state.runs[0];
+    $("#result-sentence").textContent = latest.status === "BLOCKED_DRIFT" ? "Latest result: input drift was detected before output was written." : "Latest result: compatible input reused the approved recipe with no model call during execution.";
+  }
+
+  function renderRoles() {
+    const health = state.health || {};
+    const roles = [
+      ["Gemma (Ollama)", "compiler", health.ollama?.status === "ready", "gold", health.ollama?.status === "ready" ? "ready" : "unavailable"],
+      ["Mastra sidecar", "repair agent", health.mastra?.status === "ready", "gold", health.mastra?.status === "ready" ? "ready" : "unavailable"],
+      ["Molt verifier", "authority", true, "jade", "ready"],
+      ["Temporal", "durable run", Boolean(state.config?.temporal), "", "configured"],
+      ["TabPFN", "advisory", Boolean(health.tabpfn?.enabled && health.tabpfn?.license_accepted), "", health.tabpfn?.enabled ? "unavailable" : "disabled"],
+    ];
+    $("#roles-list").innerHTML = roles.map(([name, role, ready, tone, statusText]) => `<div class="role-row"><span class="role-status ${ready ? "ready" : statusText === "disabled" ? "disabled" : ""}" aria-label="${statusText}"></span><span class="role-name">${escapeHTML(name)}</span><span class="role-pill ${tone}">${escapeHTML(role)}</span><span class="role-state">${escapeHTML(statusText)}</span></div>`).join("");
+  }
+
+  function renderRepairCard() {
+    const target = $("#repair-card");
+    const run = state.runs.find((item) => String(item.id) === String(state.selectedRun));
+    if (!target || !run || run.status !== "BLOCKED_DRIFT") { if (target) { target.hidden = true; target.innerHTML = ""; } return; }
+    const proposal = state.repairs.find((item) => String(item.source_run_id) === String(run.id));
+    const mastraReady = state.health?.mastra?.status === "ready";
+    const statusText = proposal?.status || "not requested";
+    const proposalStatus = proposal?.status || "NOT_REQUESTED";
+    const steps = [
+      ["1. Drift blocked", "Molt stopped before writing output and placed the input in quarantine.", true],
+      ["2. Ask Mastra", "Mastra receives only the active recipe, masked profile, and structural drift report.", Boolean(proposal) || mastraReady],
+      ["3. Candidate stored", proposal ? "The proposed recipe is stored separately from the active recipe." : "Nothing is stored until Mastra returns a valid candidate.", Boolean(proposal)],
+      ["4. Run tests", proposalStatus === "VERIFIED" ? "The complete regression suite passed." : proposalStatus === "REJECTED" ? "The regression suite rejected this candidate." : "Click Run tests on the candidate before approval.", ["VERIFIED", "REJECTED"].includes(proposalStatus)],
+      ["5. Human decision", proposalStatus === "APPROVED" ? "A person approved the verified repair." : proposalStatus === "REJECTED" ? "A person rejected the repair or tests failed." : "A person must review the evidence and approve it explicitly.", proposalStatus === "APPROVED" || proposalStatus === "REJECTED"],
+    ];
+    target.hidden = false; target.className = "repair-card";
+    target.innerHTML = `<div class="panel-heading"><div><h3>Repair for ${escapeHTML(shortId(run.id))}</h3><span class="repair-code">${escapeHTML(run.errorCode || "DRIFT")}</span></div><a class="evidence-link" href="/diff.html?run=${encodeURIComponent(run.id)}">Evidence diff</a></div><p><strong>Molt did not guess.</strong> ${escapeHTML(run.errorMessage || "Input drift was detected before output was written.")}</p><div class="repair-grid"><div>Quarantine<strong>${run.quarantine ? "created" : "pending"}</strong></div><div>Active recipe<strong>${escapeHTML(shortId(run.ver))}</strong></div><div>Verification<strong>${escapeHTML(statusText)}</strong></div></div><div class="repair-steps">${steps.map(([title, detail, complete], index) => `<button class="repair-step ${complete ? "complete" : ""}" type="button" aria-expanded="false"><span>${escapeHTML(title)}</span><small>${escapeHTML(detail)}</small></button>`).join("")}</div><div class="repair-warning">Repair proposals are inactive until tests pass and a person approves them.</div><div class="repair-actions"><button class="quiet-button primary" data-mastra-repair="${escapeHTML(run.id)}" ${mastraReady && !proposal ? "" : "disabled"}>Suggest Mastra repair</button>${!mastraReady ? "<small>Mastra sidecar unavailable. Start it at the configured local endpoint.</small>" : ""}${proposal?.status === "PROPOSED" ? `<button class="quiet-button" data-action="verify" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Run repair tests</button>` : ""}${proposal?.status === "PROPOSED" ? "<small>Step 4: run the full regression suite before accepting the repair.</small>" : ""}${proposal?.status === "VERIFIED" ? `<button class="quiet-button" data-action="approve" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Approve repair</button>` : ""}${proposal ? `<button class="quiet-button" data-action="reject" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Reject repair</button>` : ""}</div>`;
+  }
+
+  function renderRecipeReview() {
+    const target = $("#recipe-review");
+    if (!target) return;
+    const active = state.versions.find((version) => version.state === "active");
+    const candidate = state.versions.find((version) => version.state === "candidate");
+    const rejected = state.versions.find((version) => version.state === "rejected");
+    const version = candidate || rejected || active;
+    if (!version) { target.className = "recipe-review-empty"; target.textContent = "Create an automation and compile a recipe to see its operations, verification result, and human approval state."; $("#recipe-review-status").textContent = "No recipe yet"; return; }
+    const recipe = version.recipe || {};
+    const checks = version.verification?.checks_total ? `${version.verification.checks_passed || 0}/${version.verification.checks_total} checks passed` : "Verification not run";
+    const isActive = version.state === "active";
+    const statusLabel = isActive ? "Approved and active" : version.rawStatus === "REJECTED" ? "Not accepted" : version.rawStatus === "AWAITING_APPROVAL" ? "Waiting for human acceptance" : "Candidate awaiting independent verification";
+    const statusClass = isActive ? "active" : version.rawStatus === "REJECTED" ? "rejected" : "";
+    const repair = repairFor(version.id);
+    target.className = "recipe-review";
+    target.innerHTML = `<div class="recipe-summary"><div class="recipe-title-row"><span class="recipe-name">${escapeHTML(recipe.name || "Unnamed recipe")}</span><span class="approval-state ${statusClass}">${escapeHTML(statusLabel)}</span></div><p class="recipe-description">${escapeHTML(recipe.description || "No description was stored with this recipe.")}</p><div class="recipe-meta"><div><strong>Version ${escapeHTML(version.v)}</strong><span>${escapeHTML(version.kind)} proposal</span></div><div><strong>${escapeHTML(checks)}</strong><span>independent verification</span></div><div><strong>${escapeHTML(version.provider)}</strong><span>proposal source</span></div></div><div><span class="chart-note">Allowed operations</span><div class="recipe-operations">${recipe.operations?.length ? recipe.operations.map((operation) => `<span class="recipe-operation">${escapeHTML(operation.type || operation.operation || "operation")}</span>`).join("") : "<span class=\"recipe-review-empty\">No operations recorded.</span>"}</div></div></div><div class="recipe-approval"><h3>Human acceptance</h3><p>${isActive ? "A person accepted this recipe after verification. It is the only version allowed on the normal run path." : version.rawStatus === "REJECTED" ? "This candidate was not accepted. It remains recorded for review and cannot run." : "Molt will not activate this draft from model output alone. Review the operations and verification result, then choose an action."}</p><div class="approval-checks">Current state: <strong>${escapeHTML(version.rawStatus)}</strong><br>${escapeHTML(checks)}</div><div class="approval-actions">${version.rawStatus === "DRAFT" || version.rawStatus === "VERIFYING" ? `<button class="quiet-button" data-action="verify" data-id="${escapeHTML(repair ? repair.id : version.id)}" data-kind="${repair ? "repair" : "compile"}">Run tests</button>` : ""}${version.rawStatus === "AWAITING_APPROVAL" && !repair ? `<button class="quiet-button primary" data-action="approve" data-id="${escapeHTML(version.id)}" data-kind="compile">Accept recipe</button>` : ""}${repair?.status === "VERIFIED" ? `<button class="quiet-button primary" data-action="approve" data-id="${escapeHTML(repair.id)}" data-kind="repair">Accept repair</button>` : ""}</div></div>`;
+    $("#recipe-review-status").textContent = statusLabel;
   }
 
   function safeFileName(value) {
@@ -290,25 +373,31 @@
       details.column ? `<strong>Affected column:</strong> ${escapeHTML(details.column)}` : "",
       details.unmapped_count ? `<strong>Unmapped rows:</strong> ${escapeHTML(details.unmapped_count)}` : "",
     ].filter(Boolean).join("");
-    panel.innerHTML = `<div class="inspector-top"><div><h3 class="inspector-title">${blocked ? "Why Molt blocked this file" : "What Molt did with this file"}</h3><p class="inspector-subtitle">${escapeHTML(safeFileName(run.input))} · ${formatDate(run.at)}</p></div><span class="run-status ${blocked ? "blocked" : "success"}">${escapeHTML(run.status.replace(/_/g, " "))}</span></div><div class="inspector-grid"><div class="inspector-stat"><strong>${escapeHTML(run.errorCode || (run.status === "SUCCEEDED" ? "RECIPE_APPLIED" : "RUN_RESULT"))}</strong><span>decision</span></div><div class="inspector-stat"><strong>${run.rows} rows</strong><span>rows written / observed</span></div><div class="inspector-stat"><strong>${run.calls} model calls</strong><span>at execution time</span></div></div><div class="inspector-details">${blocked ? `<p><strong>Molt did not guess.</strong> The input no longer satisfied the approved recipe contract, so no output was written and the file was quarantined for review.</p><p>${escapeHTML(run.errorMessage || "The file was rejected by the deterministic guard.")}</p>${structural}` : `<p><strong>Compatible input.</strong> The stored approved recipe ran deterministically. The model was not called again.</p><p>Output: <code>${escapeHTML(safeFileName(run.output))}</code></p>`}</div>`;
+    const diffLink = `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;"><a class="quiet-button primary" href="/diff.html?run=${encodeURIComponent(run.id)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;">Open evidence diff</a>${blocked ? `<button class="quiet-button" data-mastra-repair="${escapeHTML(run.id)}" type="button">Suggest Mastra repair</button>` : ""}</div>`;
+    panel.innerHTML = `<div class="inspector-top"><div><h3 class="inspector-title">${blocked ? "Why Molt blocked this file" : "What Molt did with this file"}</h3><p class="inspector-subtitle">${escapeHTML(safeFileName(run.input))} · ${formatDate(run.at)}</p></div><span class="run-status ${blocked ? "blocked" : "success"}">${escapeHTML(run.status.replace(/_/g, " "))}</span></div><div class="inspector-grid"><div class="inspector-stat"><strong>${escapeHTML(run.errorCode || (run.status === "SUCCEEDED" ? "RECIPE_APPLIED" : "RUN_RESULT"))}</strong><span>decision</span></div><div class="inspector-stat"><strong>${run.rows} rows</strong><span>rows written / observed</span></div><div class="inspector-stat"><strong>${run.calls} model calls</strong><span>at execution time</span></div></div><div class="inspector-details">${blocked ? `<p><strong>Molt did not guess.</strong> The input no longer satisfied the approved recipe contract, so no output was written and the file was quarantined for review.</p><p>${escapeHTML(run.errorMessage || "The file was rejected by the deterministic guard.")}</p>${structural}` : `<p><strong>Compatible input.</strong> The stored approved recipe ran deterministically. The model was not called again.</p><p>Output: <code>${escapeHTML(safeFileName(run.output))}</code></p>`}</div>${diffLink}`;
   }
 
   function renderChart() {
+    if (!$("#calls-chart")) return;
+    if (!state.runs.length) { $("#calls-chart").innerHTML = `<div class="empty-state">No measured runs yet.</div>`; $("#chart-summary").textContent = "No runs yet"; $("#chart-text-summary").textContent = "No measured runs yet."; return; }
     const runs = state.runs.slice(0, 10).reverse();
-    const width = 640; const height = 170; const pad = 24;
+    const width = 560; const height = 300; const pad = 34;
     const max = Math.max(1, runs.length);
     const x = (index) => pad + (index * (width - pad * 2)) / Math.max(1, max - 1);
-    const baseline = runs.map((_, index) => `${x(index)},${height - pad - (index * (height - pad * 2)) / Math.max(1, max - 1)}`).join(" ");
-    let step = "";
-    runs.forEach((run, index) => { const px = x(index); const py = height - pad - (run.calls ? 35 : 0); step += index ? ` L${px} ${py} L${px} ${py}` : `M${px} ${py}`; });
-    const points = runs.map((run, index) => `<circle cx="${x(index)}" cy="${height - pad - (run.calls ? 35 : 0)}" r="3" fill="var(--ok)"></circle>`).join("");
-    $("#calls-chart").innerHTML = `<svg viewBox="0 0 ${width} ${height}" aria-hidden="true"><line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="var(--line)"/><polyline points="${baseline}" fill="none" stroke="var(--strong-line)" stroke-width="1.5" stroke-dasharray="4 5"/><path d="${step || `M${pad} ${height - pad}`}" fill="none" stroke="var(--ok)" stroke-width="2"/>${points}<text x="${pad}" y="${height - 7}" fill="var(--faint)" font-size="9">older</text><text x="${width - pad - 24}" y="${height - 7}" fill="var(--faint)" font-size="9">latest</text></svg>`;
-    $("#run-summary").textContent = `${state.runs.length} run${state.runs.length === 1 ? "" : "s"}`;
+    const y = (calls) => height - pad - Math.min(220, calls * 30);
+    const baseline = runs.map((_, index) => `${x(index)},${y(1)}`).join(" ");
+    let step = `M${x(0)} ${y(0)}`;
+    runs.forEach((_, index) => { if (index) step += ` H${x(index)} V${y(0)}`; });
+    const drift = runs.map((run, index) => run.status === "BLOCKED_DRIFT" ? `<line x1="${x(index)}" x2="${x(index)}" y1="${pad}" y2="${height - pad}" stroke="var(--blocked)" stroke-dasharray="4 5"/><text x="${x(index) + 4}" y="${pad + 12}" fill="var(--blocked)" font-size="11">run ${index + 1}</text>` : "").join("");
+    $("#calls-chart").innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Model calls compared with deterministic Molt reuse"><defs><pattern id="crosshatch" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M-2 2L2-2M0 10L10 0M8 12L12 8" stroke="#b9bcc2" stroke-width="1" opacity=".5"/><path d="M8-2L12 2M0 0L10 10M-2 8L2 12" stroke="#8d9096" stroke-width=".8" opacity=".42"/></pattern></defs><line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#4a4d53" stroke-dasharray="1 5" stroke-linecap="round"/><polyline points="${baseline}" fill="none" stroke="var(--ink)" stroke-width="2.2"/><path d="${step}" fill="none" stroke="var(--live)" stroke-width="3.2"/>${drift}<text x="${pad}" y="${height - 10}" fill="var(--muted)" font-size="11">older</text><text x="${width - 74}" y="${height - 10}" fill="var(--muted)" font-size="11">latest</text><text x="${pad}" y="18" fill="var(--muted)" font-size="11">agent prompted every run</text><text x="${width - 150}" y="18" fill="var(--live)" font-size="11">Molt · ${runs.filter((run) => run.status === "SUCCEEDED" && run.calls === 0).length} calls avoided</text></svg>`;
+    $("#chart-summary").textContent = `${state.runs.length} measured run${state.runs.length === 1 ? "" : "s"}`;
+    $("#chart-text-summary").textContent = `${runs.filter((run) => run.status === "SUCCEEDED" && run.calls === 0).length} successful run(s) reused the recipe without a model call.`;
   }
 
   function repairFor(versionId) { return state.repairs.find((repair) => String(repair.candidate_version_id) === String(versionId)); }
 
   function renderVersions() {
+    if (!$("#version-summary") || !$("#versions-list")) return;
     $("#version-summary").textContent = `${state.versions.length} version${state.versions.length === 1 ? "" : "s"}`;
     if (!state.versions.length) { $("#versions-list").innerHTML = `<p class="empty-row">No recipe versions returned by the local API.</p>`; return; }
     $("#versions-list").innerHTML = state.versions.slice(0, 5).map((version) => {
@@ -321,12 +410,14 @@
   }
 
   function renderRuns() {
-    $("#runs-body").innerHTML = state.runs.length ? state.runs.map((run) => `<tr class="${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}" data-run-id="${escapeHTML(run.id)}" tabindex="0" title="Select to inspect this run"><td><span class="run-name">${escapeHTML(shortId(run.id))}</span><br><small>${formatDate(run.at)}</small></td><td><span class="run-status ${run.status === "BLOCKED_DRIFT" ? "blocked" : status(run.status) === "success" ? "success" : ""}">${escapeHTML(run.status.replace(/_/g, " "))}</span></td><td>${run.rows}</td><td>${run.calls}</td><td>${escapeHTML(shortId(run.ver))}</td><td>${formatMs(run.ms)}</td></tr>`).join("") : `<tr><td class="empty-row" colspan="6">No runs returned by the local API.</td></tr>`;
+    const body = $("#runs-body");
+    if (!body) return;
+    body.innerHTML = state.runs.length ? state.runs.map((run) => `<tr class="${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}" data-run-id="${escapeHTML(run.id)}" tabindex="0" title="Select to inspect this run"><td class="result-cell" data-label="Result"><span class="badge ${run.status === "BLOCKED_DRIFT" ? "blocked" : "success"}">${escapeHTML(run.status === "BLOCKED_DRIFT" ? "Blocked: drift" : run.status === "SUCCEEDED" ? "Succeeded" : run.status)}</span><br><span class="run-name">${escapeHTML(shortId(run.id))}</span></td><td data-label="Rows">${run.rows}</td><td data-label="Model calls">${run.calls}</td><td data-label="Recipe">${escapeHTML(shortId(run.ver))}</td><td data-label="Time">${formatMs(run.ms)}</td><td data-label="Evidence"><a class="evidence-link" href="/diff.html?run=${encodeURIComponent(run.id)}">Evidence diff</a></td></tr>`).join("") : `<tr><td class="empty-row" colspan="6">No runs yet. Run a CSV to create evidence.</td></tr>`;
   }
 
   function render() {
     const selected = state.autos.find((auto) => String(auto.id) === String(state.selected));
-    renderTop(selected); renderRail(); renderBuilder(); renderMetric(); renderThread(); renderJourney(selected); renderChart(); renderVersions(); renderRuns(); renderRunInspector();
+    renderTop(selected); renderRail(); renderBuilder(); renderMetric(); renderJourney(selected); renderBeads(); renderRoles(); renderChart(); renderVersions(); renderRuns(); renderRunInspector(); renderRepairCard(); renderRecipeReview();
   }
 
   async function load() {
@@ -341,6 +432,14 @@
     const operation = element.dataset.action;
     const route = kind === "repair" ? `/repair-proposals/${id}/${operation}` : `/recipes/${id}/${operation}`;
     try { await post(route); showToast(`${operation === "verify" ? "Verification" : "Approval"} completed.`); await load(); } catch (error) { showToast(error.message, "error"); }
+  }
+
+  async function requestMastraRepair(runId) {
+    try {
+      await post(`/runs/${encodeURIComponent(runId)}/repair`, { model: "mastra" });
+      showToast("Mastra repair candidate proposed. Run the regression suite before approval.", "ok");
+      await load();
+    } catch (error) { showToast(error.message, "error"); }
   }
 
   async function uploadBuilderInput() {
@@ -483,8 +582,8 @@
       if (resultBox) {
         resultBox.className = `run-result-box ${succeeded ? "success" : "drift"}`;
         resultBox.innerHTML = succeeded
-          ? `<strong>✓ Run Succeeded!</strong><br>Processed ${record.rows_read} rows in ${record.duration_ms} ms with <strong>0 model calls</strong>.<br><small>Output written to: ${escapeHTML(shortId(record.output))}</small>`
-          : `<strong>⚠ Drift Blocked & Quarantined!</strong><br>Code: <code>${escapeHTML(record.error_code)}</code> — ${escapeHTML(record.error_message)}<br><small>Zero outputs written. Quarantined for review.</small>`;
+          ? `<strong>Run succeeded.</strong><br>Processed ${record.rows_read} rows in ${record.duration_ms ?? "not measured"} ms with <strong>${record.llm_calls ?? "not measured"} model calls</strong>.<br><small>Output written to: ${escapeHTML(shortId(record.output))}</small>`
+          : `<strong>Drift blocked and quarantined.</strong><br>Code: <code>${escapeHTML(record.error_code)}</code> — ${escapeHTML(record.error_message)}<br><small>No output was written. The input was quarantined for review.</small>`;
       }
       showToast(succeeded ? "Run succeeded (0 model calls)" : "Drift blocked and quarantined", succeeded ? "ok" : "warn");
       await load();
@@ -498,18 +597,32 @@
   }
 
   function setTheme(theme) {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("molt-theme", theme);
-    $("#theme-button").textContent = theme === "dark" ? "Light theme" : "Dark theme";
+    document.documentElement.dataset.theme = "dark";
+    localStorage.setItem("molt-theme", "dark");
+    const btn = $("#theme-button");
+    if (btn) btn.textContent = "Dark Theme";
   }
 
   document.addEventListener("click", (event) => {
     const auto = event.target.closest("[data-auto-id]");
     if (auto) { state.selected = auto.dataset.autoId; load(); return; }
     const runRow = event.target.closest("[data-run-id]");
-    if (runRow) { state.selectedRun = runRow.dataset.runId; renderRunInspector(); window.location.href = `/diff.html?run=${encodeURIComponent(state.selectedRun)}`; return; }
+    if (runRow) {
+      state.selectedRun = runRow.dataset.runId;
+      renderRunInspector();
+      renderBeads();
+      renderRepairCard();
+      $("#run-inspector")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+    const lifecycleStep = event.target.closest(".lifecycle-step");
+    if (lifecycleStep) { lifecycleStep.setAttribute("aria-expanded", lifecycleStep.getAttribute("aria-expanded") !== "true" ? "true" : "false"); return; }
+    const repairStep = event.target.closest(".repair-step");
+    if (repairStep) { repairStep.setAttribute("aria-expanded", repairStep.getAttribute("aria-expanded") !== "true" ? "true" : "false"); return; }
     const actionButton = event.target.closest("[data-action]");
     if (actionButton) { action(actionButton); return; }
+    const mastraButton = event.target.closest("[data-mastra-repair]");
+    if (mastraButton) { requestMastraRepair(mastraButton.dataset.mastraRepair); return; }
     const chip = event.target.closest("[data-run-path]");
     if (chip) { runCsv(chip.dataset.runPath); return; }
     const nodeButton = event.target.closest(".node");
@@ -525,6 +638,10 @@
     if (event.target.closest("#profile-input-button")) return profileBuilderInput();
     if (event.target.closest("#compile-recipe-button")) return compileBuilderRecipe();
     if (event.target.closest("#theme-button")) setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    if (event.target.closest("#menu-button")) {
+      const menu = $("#menu-button"); const rail = $("#workflow-rail"); const expanded = menu.getAttribute("aria-expanded") === "true";
+      menu.setAttribute("aria-expanded", String(!expanded)); rail.classList.toggle("open", !expanded);
+    }
   });
 
   const filePicker = $("#csv-file-picker");
@@ -550,12 +667,12 @@
     if (file) { $("#builder-path").value = `upload: ${file.name}`; setBuilderStatus(`${file.name} is ready to upload when you create the workflow.`); }
   });
 
-  const preferred = localStorage.getItem("molt-theme");
   try {
     const remembered = JSON.parse(localStorage.getItem("molt-temporal-run"));
     if (typeof remembered?.workflow_id === "string") state.temporalRun = remembered;
   } catch (_) { /* An invalid local preference must not prevent dashboard startup. */ }
-  setTheme(preferred || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  localStorage.setItem("molt-theme", "dark");
+  setTheme("dark");
   load();
   pollTemporalRun();
 }());

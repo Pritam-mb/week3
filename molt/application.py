@@ -4,10 +4,13 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import time
 from contextlib import closing
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from .config import MoltConfig
 from .core import (
@@ -82,7 +85,16 @@ class MoltService:
             with closing(self.db.connect()) as connection:
                 connection.execute("SELECT 1").fetchone()
             ollama = ollama_readiness(self.config.ollama_base_url, self.config.ollama_model, timeout=min(self.config.ollama_timeout_seconds, 5.0))
-            return {"status": "ok", "database": "ok", "workspace": {"path": str(self.config.workspace), "writable": self.config.workspace.is_dir()}, "ollama": ollama | {"configured": bool(self.config.ollama_model)}, "telemetry": self.telemetry.status(), "tabpfn": self.anomaly.readiness(), "config": self.config.as_public_dict(), "version": "0.4.0"}
+            mastra = {"status": "unavailable", "configured": bool(self.config.mastra_repair_url), "endpoint": self.config.mastra_repair_url}
+            try:
+                request = Request(f"{self.config.mastra_repair_url}/health", method="GET")
+                with urlopen(request, timeout=min(self.config.mastra_timeout_seconds, 0.25)) as response:
+                    payload = json.loads(response.read(16 * 1024).decode("utf-8"))
+                if isinstance(payload, dict) and payload.get("status") == "ok":
+                    mastra["status"] = "ready"
+            except (OSError, URLError, socket.timeout, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+            return {"status": "ok", "database": "ok", "workspace": {"path": str(self.config.workspace), "writable": self.config.workspace.is_dir()}, "ollama": ollama | {"configured": bool(self.config.ollama_model)}, "mastra": mastra, "telemetry": self.telemetry.status(), "tabpfn": self.anomaly.readiness(), "config": self.config.as_public_dict(), "version": "0.4.0"}
         except Exception as exc:
             return {"status": "degraded", "database": str(exc), "ollama": {"configured": bool(self.config.ollama_model), "status": "not_checked"}, "telemetry": self.telemetry.status(), "tabpfn": self.anomaly.readiness(), "config": self.config.as_public_dict(), "version": "0.4.0"}
 
@@ -325,6 +337,49 @@ class MoltService:
             connection.execute("UPDATE recipe_versions SET status = 'VERIFYING' WHERE id = ?", (version["id"],))
         return self.get_version(version["id"])
 
+    def _generate_mastra_repair(self, automation_id: str, run_id: str | None, task: str, profile: dict[str, Any], active: dict[str, Any], drift: dict[str, Any], model: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        payload = {
+            "automation_id": automation_id,
+            "run_id": run_id,
+            "task": task,
+            "base_version_id": active["id"],
+            "active_recipe": active["recipe"],
+            "drift_report": drift,
+            "profile": safe_profile_context(profile),
+        }
+        request = Request(
+            f"{self.config.mastra_repair_url}/repair-proposals",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.config.mastra_timeout_seconds) as response:
+                raw = response.read(self.config.max_recipe_bytes + 1)
+                if len(raw) > self.config.max_recipe_bytes:
+                    raise MoltError("MASTRA_RESPONSE_TOO_LARGE", "Mastra repair response exceeds the configured limit.")
+                data = json.loads(raw.decode("utf-8"))
+        except HTTPError as exc:
+            raise MoltError("MASTRA_HTTP_ERROR", f"Mastra repair sidecar returned HTTP {exc.code}.") from exc
+        except (OSError, URLError, socket.timeout) as exc:
+            raise MoltError("MASTRA_UNAVAILABLE", "Could not reach the Mastra repair sidecar.") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise MoltError("MASTRA_RESPONSE_INVALID", "Mastra returned malformed JSON.") from exc
+        if not isinstance(data, dict) or data.get("status") != "PROPOSED" or not isinstance(data.get("recipe"), dict):
+            raise MoltError("MASTRA_RESPONSE_INVALID", "Mastra did not return a repair proposal.")
+        recipe = validate_recipe(data["recipe"])
+        metadata = {
+            "provider": "mastra",
+            "model": data.get("model") or model,
+            "sidecar_url": self.config.mastra_repair_url,
+            "llm_calls": 1,
+            "trace_id": data.get("trace_id"),
+            "agent": "repair",
+            "proposal_reason": data.get("reason", ""),
+            "operation_diff": operation_diff(active["recipe"], recipe),
+        }
+        return recipe, metadata
+
     def _fixture_pairs(self, automation_id: str, *, recipe: dict[str, Any] | None = None, profile: dict[str, Any] | None = None) -> list[tuple[Path, Path]]:
         root = Path(__file__).resolve().parent.parent / "examples"
         automation = self.get_automation(automation_id)
@@ -410,7 +465,7 @@ class MoltService:
         return self.get_automation(automation_id)
 
     def propose_repair(self, automation_id: str, run_id: str | None = None, *, model: str | None = None, recipe_file: str | None = None) -> dict[str, Any]:
-        provider = "fixture" if recipe_file else "ollama" if model else "manual-review"
+        provider = "fixture" if recipe_file else "mastra" if model == "mastra" or (model and model.startswith("mastra/")) else "ollama" if model else "manual-review"
         with self.telemetry.span("repair.propose", provider=provider, has_run=bool(run_id)):
             return self._propose_repair(automation_id, run_id, model=model, recipe_file=recipe_file)
 
@@ -421,18 +476,42 @@ class MoltService:
             raise MoltError("APPROVAL_REQUIRED", "Automation has no active recipe to repair.")
         if run_id:
             run = self.get_run(run_id)
+            err_msg = run.get("error_message") or "The approved recipe was blocked by a deterministic drift check."
             drift = {
                 "run_id": run_id,
                 "error_code": run.get("error_code") or "UNKNOWN_DRIFT",
-                "error_message": "The approved recipe was blocked by a deterministic drift check.",
-                "message": "The approved recipe was blocked by a deterministic drift check.",
+                "error_message": err_msg,
+                "message": err_msg,
             }
-            profile = self.profile(run["input"]) if run.get("input") and Path(run["input"]).is_file() else {}
+            input_path = None
+            if run.get("input") and Path(run["input"]).is_file():
+                input_path = Path(run["input"])
+            elif run.get("quarantine_artifact_id") or run.get("input_artifact_id"):
+                art_id = run.get("quarantine_artifact_id") or run.get("input_artifact_id")
+                with closing(self.db.connect()) as connection:
+                    art = row_dict(connection.execute("SELECT * FROM artifacts WHERE id = ?", (art_id,)).fetchone())
+                    if art and art.get("path"):
+                        candidate_p = self.config.workspace / art["path"]
+                        if candidate_p.is_file():
+                            input_path = candidate_p
+            profile = self.profile(input_path) if input_path else {}
         else:
             drift, profile = {"reason": "user_requested_repair"}, {}
         if recipe_file:
             candidate = load_fixture_recipe(Path(recipe_file))
             metadata = {"provider": "fixture", "llm_calls": 0}
+        elif model == "mastra" or (model and model.startswith("mastra/")):
+            recipe, metadata = self._generate_mastra_repair(
+                automation_id,
+                run_id,
+                "Repair the active recipe using this drift report",
+                profile,
+                active,
+                drift,
+                model,
+            )
+            candidate = recipe
+            candidate_version = None
         elif model:
             fixtures = self._fixture_pairs(automation_id, recipe=active["recipe"], profile=profile)
             generated = self._generate_verified_model_candidate(
@@ -453,7 +532,7 @@ class MoltService:
         else:
             candidate = active["recipe"]
             metadata = {"provider": "manual-review", "llm_calls": 0, "note": "Candidate copied for local review; supply a model for a generated repair."}
-        if recipe_file or not model:
+        if recipe_file or not model or model == "mastra" or model.startswith("mastra/"):
             candidate_version = self.create_version(automation_id, candidate, created_from="repair", model_name=model, metadata=metadata, base_version_id=active["id"])
         proposal_id = new_id("repair")
         with self.db.transaction() as connection:

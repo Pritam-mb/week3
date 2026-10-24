@@ -77,6 +77,10 @@ multi-host writes, a production cluster, or Temporal Cloud.
   explains that Gemma proposes a stored recipe rather than remembering a user,
   renders a five-stage contract graph, and lets a user click any run to inspect
   the structural reason for a drift block without showing raw cell values.
+- Added `/diff.html`, a stored-evidence page linked from the dashboard and from
+  each run row. It presents Before/After cards, decision trace, recipe steps,
+  output/quarantine result, and structural mismatch details. It intentionally
+  excludes raw CSV samples and values; it is a decision diff, not a data viewer.
 - `temporal_crash_recovery.py`: replaced incorrect hand-written numeric event
   labels with Temporal's protobuf enum. Retry count comes from the activity's
   attempt field, since intermediate retries need not appear as separate started
@@ -111,6 +115,9 @@ coverage; passing fixtures is not a guarantee over every possible input.
   deprecation warning.
 - `node --test tests/test_dashboard.cjs`: 5 dashboard behavior tests passed.
   These use a mock DOM/network, not a visual browser or screenshot claim.
+- `node --test tests/test_dashboard.cjs tests/test_diff_page.cjs`: 7 tests passed;
+  the diff assets were also served successfully at `/diff.html`, `/diff.css`,
+  and `/diff.js` from the local API.
 - `node --check molt/web/app.js`: passed.
 - `python -m compileall -q molt tests temporal_crash_recovery.py temporal_chaos.py`: passed.
 - `python temporal_crash_recovery.py`: COMPLETE, 2 activity attempts.

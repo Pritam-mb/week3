@@ -34,6 +34,39 @@ python -m molt --state-dir .molt repair-approve
 
 The approval command refuses candidates that have not passed the complete fixture suite.
 
+### Optional Mastra repair agent
+
+Mastra is an optional sidecar for **repair proposals only**. It receives a
+masked profile, the approved recipe and structural drift evidence through typed
+read-only tools, then returns a constrained candidate. It cannot write CSVs,
+activate a recipe or bypass Molt's verifier.
+
+From the repository root:
+
+```text
+cd mastra-repair
+npm install
+set MOLT_MASTRA_MODEL=<your-model-id>
+npm run dev
+```
+
+On PowerShell, use `$env:MOLT_MASTRA_MODEL = "<your-model-id>"` instead. Keep
+the model provider credentials in the sidecar's process environment; do not put
+them in `.env.example` or source control. Molt already points at
+`http://127.0.0.1:4112` by default. To request a Mastra repair, call the
+existing repair endpoint with `model: "mastra"` (or `mastra/<model-name>`).
+
+The resulting candidate still follows the normal path:
+
+```text
+Mastra proposal → Molt schema validation → full regression suite → human approval
+```
+
+The sidecar currently requires you to choose a Mastra-supported model/provider.
+If you want to keep repair fully local with `gemma3:4b`, give me the exact
+provider/adapter you want to use for Mastra's model connection; no API key is
+needed for the Molt adapter itself, but the model adapter must be configured.
+
 ## Full local MVP
 
 ### First-time setup for original use

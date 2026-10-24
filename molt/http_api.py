@@ -113,6 +113,8 @@ class MoltHandler(BaseHTTPRequestHandler):
                 return self._send({"versions": self.service.get_automation(parts[2])["versions"]})
             if parsed.path == "/" or parsed.path in {"/index.html", "/app.js", "/style.css", "/diff.html", "/diff.js", "/diff.css"}:
                 return self._static(parsed.path)
+            if parsed.path.startswith("/evidence/"):
+                return self._evidence(parsed.path)
             self._send({"error": {"code": "NOT_FOUND", "message": "Route not found."}}, 404)
         except Exception as exc:
             self._error(exc)
@@ -218,6 +220,27 @@ class MoltHandler(BaseHTTPRequestHandler):
         body = target.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _evidence(self, route: str) -> None:
+        filename = route.removeprefix("/evidence/").lstrip("/")
+        evidence_root = (self.service.config.workspace.parent / "evidence").resolve()
+        target = (evidence_root / filename).resolve()
+        try:
+            target.relative_to(evidence_root)
+        except ValueError as exc:
+            raise MoltError("FILE_ACCESS_DENIED", "Evidence path is outside the evidence root.") from exc
+        if not target.is_file():
+            self._send({"error": {"code": "NOT_FOUND", "message": "Evidence file not found."}}, 404)
+            return
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

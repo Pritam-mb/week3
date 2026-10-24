@@ -21,6 +21,8 @@ class MoltConfig:
     ollama_timeout_seconds: float = 30.0
     ollama_max_retries: int = 2
     ollama_max_response_bytes: int = 512 * 1024
+    mastra_repair_url: str = "http://127.0.0.1:4112"
+    mastra_timeout_seconds: float = 30.0
     local_only: bool = True
     sentry_dsn: str = ""
     tabpfn_enabled: bool = False
@@ -75,6 +77,7 @@ class MoltConfig:
             "workspace": str(self.workspace), "host": self.host, "port": self.port,
             "ollama_base_url": self.ollama_base_url, "ollama_model": self.ollama_model,
             "ollama_timeout_seconds": self.ollama_timeout_seconds, "ollama_max_retries": self.ollama_max_retries,
+            "mastra_repair_url": self.mastra_repair_url, "mastra_timeout_seconds": self.mastra_timeout_seconds,
             "max_file_bytes": self.max_file_bytes, "max_rows": self.max_rows,
             "local_only": self.local_only, "sentry_configured": bool(self.sentry_dsn),
             "tabpfn_enabled": self.tabpfn_enabled, "tabpfn_license_accepted": self.tabpfn_license_accepted,
@@ -136,6 +139,8 @@ def config_from_workspace(path: str | Path | None = None) -> MoltConfig:
         ollama_timeout_seconds=_float("MOLT_MODEL_TIMEOUT_SECONDS", values, 30.0),
         ollama_max_retries=_int("MOLT_MODEL_MAX_RETRIES", values, 2),
         ollama_max_response_bytes=_int("MOLT_MODEL_MAX_RESPONSE_KB", values, 512) * 1024,
+        mastra_repair_url=_value("MOLT_MASTRA_REPAIR_URL", values, "http://127.0.0.1:4112").rstrip("/"),
+        mastra_timeout_seconds=_float("MOLT_MASTRA_TIMEOUT_SECONDS", values, 30.0),
         local_only=_bool("MOLT_LOCAL_ONLY", values, True),
         sentry_dsn=_value("SENTRY_DSN", values, ""),
         tabpfn_enabled=_bool("MOLT_TABPFN_ENABLED", values, False),

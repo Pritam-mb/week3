@@ -3,177 +3,109 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#020617">
-  <title>molt · Verified Workflows</title>
+  <meta name="theme-color" content="#131416">
+  <meta name="description" content="Molt verifies local CSV workflows, reuses approved recipes, and blocks structural drift before output.">
+  <title>molt · Verified workflows</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23131416'/%3E%3Cpath d='M5 16h22M10 11v10M16 8v16M22 11v10' stroke='%234fc58f' stroke-width='2' fill='none'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="shell">
+  <div class="shell" id="top">
     <header class="topbar">
-      <a class="wordmark" href="#top" aria-label="molt home">
-        <span class="thread-glyph" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>molt</span>
-      </a>
-      <div class="source-note"><span class="live-dot" id="source-dot"></span><span id="source-note">Local API · connecting</span></div>
+      <button class="menu-button" id="menu-button" type="button" aria-expanded="false" aria-controls="workflow-rail">Menu</button>
+      <a class="wordmark" href="#overview" aria-label="molt overview"><span class="thread-glyph" aria-hidden="true"><i></i><i></i><i></i></span><span>molt</span></a>
+      <div class="top-status"><span class="live-dot" id="source-dot"></span><span id="source-note">Local API · connecting</span></div>
       <div class="top-actions">
         <span class="status-chip" id="health-chip"><span class="status-dot"></span>Checking</span>
-        <span class="status-chip" id="model-chip"><span class="status-dot"></span>Model idle</span>
-        <button class="theme-button" id="theme-button" type="button" aria-label="Change color theme">Theme</button>
+        <span class="status-chip" id="model-chip"><span class="status-dot"></span>Compiler unavailable</span>
+        <button class="theme-button" id="theme-button" type="button">Theme</button>
       </div>
     </header>
 
-    <div class="workspace" id="top">
-      <aside class="rail" aria-label="Workflows">
-        <div class="rail-heading"><span>Workflows</span><span class="rail-count" id="automation-count">0</span></div>
+    <div class="workspace">
+      <aside class="rail" id="workflow-rail" aria-label="Workflow navigation">
+        <div class="rail-hatch" aria-hidden="true"></div>
+        <button class="new-automation-btn" type="button" onclick="document.querySelector('#builder-panel')?.scrollIntoView?.({behavior:'smooth'})">+ New automation</button>
+        <div class="rail-heading"><span>Recent</span><span class="rail-count" id="automation-count">0</span></div>
         <nav class="automation-rail" id="automation-rail"></nav>
-        <div class="rail-foot"><span class="rail-line"></span><span>local workspace</span></div>
+        <div class="workspace-list">
+          <h2>Workspace</h2>
+          <div><code>in/</code><span>inputs</span></div>
+          <div><code>done/</code><span>outputs</span></div>
+          <div><code>quarantine/</code><span>blocked review</span></div>
+        </div>
+        <p class="rail-foot"><span class="rail-line"></span>local workspace · no outbound telemetry</p>
       </aside>
 
       <main class="main" id="main-content">
-        <div class="main-heading">
-          <div>
-            <p class="kicker">OVERVIEW</p>
-            <h1 id="automation-title">Loading your workflow</h1>
-            <p class="lede" id="automation-description">Live from the local API.</p>
-          </div>
-          <div class="heading-actions">
-            <span class="sync-label" id="sync-label">Not synced</span>
-            <button class="quiet-button" id="refresh-button" type="button">Refresh</button>
-            <button class="quiet-button primary" id="run-csv-button" type="button">Run CSV</button>
-            <button class="quiet-button" id="temporal-run-button" type="button" disabled>Run durably</button>
-            <input type="file" id="csv-file-picker" accept=".csv" style="display: none;">
-          </div>
+        <div class="main-heading" id="overview">
+          <div><p class="kicker">Overview</p><h1 id="automation-title">Loading your workflow</h1><p class="lede" id="automation-description">Live from the local API.</p></div>
+          <div class="heading-actions"><span class="sync-label" id="sync-label">Not synced</span><button class="quiet-button" id="refresh-button" type="button">Refresh</button><button class="quiet-button" id="temporal-run-button" type="button" disabled>Run durably</button></div>
         </div>
 
-        <section class="panel builder-panel" aria-labelledby="builder-title">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">BUILD A WORKFLOW</p>
-              <h2 id="builder-title">Create the thread before you run it</h2>
-              <p class="panel-lede">Create automation → profile input → compile recipe → verify → approve → run.</p>
-            </div>
-            <span class="chart-note" id="builder-stage">Step 1 of 4</span>
-          </div>
-          <div class="builder-grid">
-            <label class="field field-wide">Workflow name
-              <input id="builder-name" type="text" placeholder="Monthly expense cleanup" autocomplete="off">
-            </label>
-            <label class="field field-wide">What should it do?
-              <textarea id="builder-task" rows="3" placeholder="Trim merchant names, normalize dates, and keep unrelated columns."></textarea>
-            </label>
-            <label class="field">CSV source
-              <input id="builder-file" type="file" accept=".csv">
-              <small>Upload a CSV into the local workspace.</small>
-            </label>
-            <label class="field">Or workspace CSV path
-              <input id="builder-path" type="text" placeholder="in/expense.csv" autocomplete="off">
-              <small>Use a path inside the configured workspace.</small>
-            </label>
-            <label class="field">Recipe compiler
-              <select id="builder-source">
-                <option value="gemma">Local Gemma / Ollama</option>
-                <option value="fixture">Checked-in fixture recipe</option>
-              </select>
-            </label>
-            <label class="field" id="builder-model-field">Model
-              <input id="builder-model" type="text" value="gemma3:4b" autocomplete="off">
-              <small>Gemma must be running locally for this option.</small>
-            </label>
-          </div>
-          <div class="builder-actions">
-            <button class="quiet-button primary" id="create-automation-button" type="button">1 · Create automation</button>
-            <button class="quiet-button" id="profile-input-button" type="button" disabled>2 · Profile input</button>
-            <button class="quiet-button" id="compile-recipe-button" type="button" disabled>3 · Compile recipe</button>
-          </div>
-          <div class="builder-status" id="builder-status" role="status" aria-live="polite">No new workflow staged yet.</div>
-          <div class="profile-summary" id="profile-summary" hidden></div>
-        </section>
-
-        <section class="panel explain-panel" aria-labelledby="purpose-title">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">WHY MOLT EXISTS</p>
-              <h2 id="purpose-title">Teach once. Test against truth. Reuse without guessing.</h2>
-            </div>
-            <span class="chart-note">The model is a compiler, not the runtime</span>
-          </div>
-          <div class="explain-grid">
-            <article class="explain-card"><span class="explain-number">01</span><h3>What Gemma sees</h3><p>Your task, column names, type counts, and masked examples. Gemma proposes a constrained JSON recipe; it does not keep a permanent memory of your business.</p></article>
-            <article class="explain-card"><span class="explain-number">02</span><h3>What Molt stores</h3><p>The recipe version, its verification results, approval decision, schema contract, and audit trail are stored in SQLite for this workspace.</p></article>
-            <article class="explain-card"><span class="explain-number">03</span><h3>What changes on a new file</h3><p>Molt compares the file to the approved contract. Compatible files run deterministically with zero model calls. Missing columns, unexpected values, or type drift stop the run.</p></article>
-            <article class="explain-card"><span class="explain-number">04</span><h3>What a human approves</h3><p>A candidate stays inactive until independent fixtures and invariants pass. Approval is a deliberate click; failed candidates cannot replace the active recipe.</p></article>
+        <section class="summary-strip" aria-label="Workflow summary">
+          <div class="summary-hero"><div class="hero-number" id="calls-number">0</div><div><h2>Model calls at run time</h2><p id="calls-caption">Compatible input reused the approved recipe.</p></div></div>
+          <div class="summary-figures">
+            <div class="figure"><span>Succeeded runs</span><strong id="bento-successful-runs">Not measured</strong></div><i></i>
+            <div class="figure"><span>Blocked as drift</span><strong id="bento-drift-events">Not measured</strong></div><i></i>
+            <div class="figure"><span>Model calls avoided</span><strong id="bento-calls-avoided">Not measured</strong></div><i></i>
+            <div class="figure"><span>Mean run time</span><strong id="bento-latency">Not measured</strong></div>
           </div>
         </section>
 
-        <section class="panel journey-panel" aria-labelledby="journey-title">
-          <div class="panel-heading">
-            <div><p class="kicker">THE MOLT CONTRACT</p><h2 id="journey-title">Every file follows this path</h2></div>
-            <span class="chart-note" id="journey-caption">No file selected</span>
-          </div>
-          <div class="journey-graph" id="journey-graph" role="img" aria-label="Molt compile verify approve run drift pipeline"></div>
-        </section>
-
-        <p id="temporal-status" class="api-note" role="status" aria-live="polite">Durable runs use your local Temporal server and worker.</p>
-
-        <section class="panel run-panel" id="run-csv-panel" aria-labelledby="live-execution-title">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">LIVE EXECUTION</p>
-              <h2 id="live-execution-title">Test a CSV on the Active Recipe</h2>
-            </div>
-            <span class="chart-note">100% deterministic · 0 model calls</span>
-          </div>
-          <div class="run-box">
-            <div class="run-dropzone" id="csv-dropzone" role="button" tabindex="0" aria-label="Upload any CSV to test">
-              <span class="drop-icon">📂</span>
-              <p><strong>Click to upload any CSV</strong> or drag and drop here</p>
-              <small>Uploads and runs through the active recipe instantly</small>
-            </div>
-            <div class="sample-chips">
-              <span class="chips-label">Quick sample tests:</span>
-              <button type="button" class="chip-button ok" data-run-path="workspace/in/team-october-expenses.csv">✓ Team Expenses (7 rows, dedupe)</button>
-              <button type="button" class="chip-button ok" data-run-path="workspace/in/test-live-success.csv">✓ Simple Expense (Success)</button>
-              <button type="button" class="chip-button warn" data-run-path="workspace/in/test-live-drift-column.csv">⚠ Missing Column (Drift)</button>
-              <button type="button" class="chip-button warn" data-run-path="workspace/in/test-live-drift-category.csv">⚠ Unknown Value (Drift)</button>
-            </div>
-            <div id="run-result-box" class="run-result-box" style="display: none;" aria-live="polite"></div>
-          </div>
-        </section>
-
-        <section class="hero-metric" aria-labelledby="calls-title">
-          <div class="hero-number" id="calls-number">0</div>
-          <div><h2 id="calls-title">model calls at run time</h2><p id="calls-caption">Reuse is quiet by design.</p></div>
-        </section>
-
-        <section class="thread-panel panel" aria-labelledby="thread-title">
-          <div class="panel-heading">
-            <div><p class="kicker">THE WORKING THREAD</p><h2 id="thread-title">Compile once. Run with a checked recipe.</h2></div>
-            <span class="legend"><span class="legend-item"><i class="legend-dot ok"></i>active</span><span class="legend-item"><i class="legend-dot bad"></i>blocked</span></span>
-          </div>
-          <div class="thread-canvas" id="thread-canvas" role="group" aria-label="Molt workflow graph"></div>
-          <div class="thread-explanation" id="thread-explanation" aria-live="polite">Select a bead to inspect its role.</div>
-        </section>
-
-        <div class="two-column">
-          <section class="panel chart-panel" aria-labelledby="chart-title">
-            <div class="panel-heading"><div><p class="kicker">CALLS OVER RUNS</p><h2 id="chart-title">Inference stays out of the loop</h2></div><span class="chart-note" id="run-summary">0 runs</span></div>
-            <div class="chart-wrap" id="calls-chart" role="img" aria-label="Calls over runs chart"></div>
-            <div class="chart-legend"><span><i class="line-sample baseline"></i>agent every run</span><span><i class="line-sample molt-line"></i>molt</span></div>
+        <div class="primary-grid">
+          <section class="panel lifecycle-panel" aria-labelledby="lifecycle-title">
+            <div class="panel-heading"><div><p class="kicker">Lifecycle</p><h2 id="lifecycle-title">From input to approved reuse</h2></div><span class="chart-note" id="journey-caption">Create an automation to begin</span></div>
+            <div class="lifecycle" id="journey-graph" aria-label="Molt lifecycle"></div>
+            <div class="lifecycle-help">Click one step. Each step explains what Molt does, what result is stored, and what happens next.</div>
           </section>
+          <section class="panel beads-panel" aria-labelledby="beads-title">
+            <div class="panel-heading"><div><p class="kicker">Runs</p><h2 id="beads-title">One bead per decision</h2></div><span class="chart-note" id="run-summary">No runs yet</span></div>
+            <div class="run-beads" id="run-beads"></div>
+            <p class="result-sentence" id="result-sentence">No runs yet. Run a compatible CSV to create evidence.</p>
+            <div id="repair-card" hidden></div>
+          </section>
+        </div>
 
-          <section class="panel versions-panel" aria-labelledby="versions-title">
-            <div class="panel-heading"><div><p class="kicker">RECIPE VERSIONS</p><h2 id="versions-title">Beads that passed review</h2></div><span class="chart-note" id="version-summary">0 versions</span></div>
-            <div id="versions-list" class="version-list"></div>
+        <section class="panel recipe-review-panel" id="recipe-review-panel" aria-labelledby="recipe-review-title">
+          <div class="panel-heading"><div><p class="kicker">Recipe and approval</p><h2 id="recipe-review-title">The recipe is visible before it can run</h2></div><span class="chart-note" id="recipe-review-status">No recipe yet</span></div>
+          <div id="recipe-review" class="recipe-review-empty">Create an automation and compile a recipe to see its operations, verification result, and human approval state.</div>
+        </section>
+
+        <div class="secondary-grid">
+          <section class="panel chart-panel" aria-labelledby="chart-title">
+            <div class="panel-heading"><div><p class="kicker">Calls over runs</p><h2 id="chart-title">Inference stays out of the loop</h2></div><span class="chart-note" id="chart-summary">No runs yet</span></div>
+            <div class="chart-wrap" id="calls-chart" role="img" aria-label="Calls over runs chart"></div>
+            <p class="chart-text-summary" id="chart-text-summary">No measured runs yet.</p>
+          </section>
+          <section class="panel roles-panel" aria-labelledby="roles-title">
+            <div class="panel-heading"><div><p class="kicker">System and roles</p><h2 id="roles-title">Each integration has one job</h2></div></div>
+            <div class="roles-list" id="roles-list"></div>
           </section>
         </div>
 
         <section class="panel runs-panel" aria-labelledby="runs-title">
-          <div class="panel-heading"><div><p class="kicker">RUN HISTORY</p><h2 id="runs-title">The thread remembers</h2></div><span class="chart-note">blocked drift stays visible</span></div>
-          <div class="run-table-wrap"><table class="run-table"><thead><tr><th>Run</th><th>Status</th><th>Rows</th><th>Model calls</th><th>Recipe</th><th>Duration</th></tr></thead><tbody id="runs-body"></tbody></table></div>
+          <div class="panel-heading"><div><p class="kicker">Run history</p><h2 id="runs-title">Evidence stays inspectable</h2></div><span class="chart-note">No raw CSV values</span></div>
+          <div class="run-table-wrap"><table class="run-table"><thead><tr><th>Result</th><th>Rows</th><th>Model calls</th><th>Recipe</th><th>Time</th><th>Evidence</th></tr></thead><tbody id="runs-body"></tbody></table></div>
           <div class="run-inspector" id="run-inspector" hidden></div>
         </section>
 
-        <div class="api-note" id="api-note" aria-live="polite">Live from the local API</div>
+        <section class="panel builder-panel" id="builder-panel" aria-labelledby="builder-title">
+          <div class="panel-heading"><div><p class="kicker">Build a workflow</p><h2 id="builder-title">Create the thread before you run it</h2></div><span class="chart-note" id="builder-stage">Step 1 of 4</span></div>
+          <div class="builder-grid">
+            <label class="field field-wide">Workflow name<input id="builder-name" type="text" placeholder="Monthly expense cleanup" autocomplete="off"></label>
+            <label class="field field-wide">What should it do?<textarea id="builder-task" rows="3" placeholder="Trim merchant names, normalize dates, and keep unrelated columns."></textarea></label>
+            <label class="field">CSV source<input id="builder-file" type="file" accept=".csv"><small>Upload into the local workspace.</small></label>
+            <label class="field">Workspace CSV path<input id="builder-path" type="text" placeholder="in/expense.csv" autocomplete="off"></label>
+            <label class="field">Recipe compiler<select id="builder-source"><option value="gemma">Local Gemma / Ollama</option><option value="fixture">Checked-in fixture recipe</option></select></label>
+            <label class="field" id="builder-model-field">Model<input id="builder-model" type="text" value="gemma3:4b" autocomplete="off"></label>
+          </div>
+          <div class="builder-actions"><button class="quiet-button primary" id="create-automation-button" type="button">Create automation</button><button class="quiet-button" id="profile-input-button" type="button" disabled>Profile input</button><button class="quiet-button" id="compile-recipe-button" type="button" disabled>Compile recipe</button></div>
+          <div class="builder-status" id="builder-status" role="status" aria-live="polite">No new workflow staged yet.</div><div class="profile-summary" id="profile-summary" hidden></div>
+        </section>
+
+        <section class="panel run-csv-panel" id="run-csv-panel" aria-labelledby="live-execution-title"><div class="panel-heading"><div><p class="kicker">Live execution</p><h2 id="live-execution-title">Test a CSV on the active recipe</h2></div><span class="chart-note">Deterministic after approval</span></div><div class="run-dropzone" id="csv-dropzone" role="button" tabindex="0" aria-label="Upload a CSV to run">Drop a CSV here or click to upload</div><input type="file" id="csv-file-picker" accept=".csv" style="display:none"><div id="run-result-box" class="run-result-box" hidden aria-live="polite"></div></section>
+        <p id="temporal-status" class="api-note" role="status" aria-live="polite">Durable runs use your local Temporal server and worker.</p><div class="api-note" id="api-note" aria-live="polite">Live from the local API</div>
       </main>
     </div>
   </div>
