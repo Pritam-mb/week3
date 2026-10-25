@@ -1,0 +1,78 @@
+{
+  "checked_at": "2026-10-25",
+  "privacy": "Aggregate-only evidence. No credentials, DSNs, prompts, model response bodies, CSV values, local paths, or raw row payloads are recorded.",
+  "repository_checks": {
+    "python_pytest": "79 passed, 20 subtests passed, 1 deprecation warning",
+    "node_dashboard_and_diff": "9 passed",
+    "typescript_build": "PASS",
+    "javascript_syntax": "PASS",
+    "python_compileall": "PASS",
+    "git_diff_check": "PASS",
+    "verifier_measurement": "PASS; historical result file differs only because rerun metadata is current",
+    "benchmark": "PASS",
+    "offline_submission_check": "PASS"
+  },
+  "molt_health": {
+    "status": "ok",
+    "version": "0.4.0",
+    "ollama": "ready",
+    "mastra": "ready",
+    "sentry": "enabled",
+    "tabpfn_default_runtime": "disabled",
+    "temporal_configured_address": "127.0.0.1:7233"
+  },
+  "gemma_ollama": {
+    "status": "PASS",
+    "model": "gemma3:4b",
+    "live_compile_task": "trim one string column",
+    "live_model_calls": 1,
+    "validation_gate": {
+      "response_envelope": "PASS",
+      "recipe_schema": "PASS",
+      "profile_contract": "PASS"
+    },
+    "boundary": "The simple live compile worked. The recorded full expense task still has a 0/5 result after its bounded follow-up; Gemma is not claimed to solve that task reliably."
+  },
+  "mastra_groq": {
+    "sidecar_health": "PASS",
+    "molt_repair_request": "PROPOSED",
+    "provider_model": "groq/openai/gpt-oss-120b",
+    "model_calls": 1,
+    "molt_verification": "PASS",
+    "verification_checks": "6/6",
+    "human_approval": "not performed in this check",
+    "boundary": "The candidate was stored and independently verified but intentionally not activated during the test."
+  },
+  "sentry": {
+    "sdk_status": "enabled",
+    "local_span_check": "PASS",
+    "redacted_attribute_keys": ["output_rows", "provider", "rows_read", "status"],
+    "external_delivery": "not independently verified from this repository",
+    "boundary": "The local SDK and allowlisted redaction path work. No clean Sentry screenshot or account-side delivery receipt is claimed."
+  },
+  "tabpfn": {
+    "status": "COMPLETE",
+    "package_version": "9.1.0",
+    "device": "cpu",
+    "dataset": "1500-row synthetic supervised fixture",
+    "train_rows": 1200,
+    "held_out_rows": 300,
+    "rows_flagged": 55,
+    "precision": 0.9454545454545454,
+    "recall": 0.7222222222222222,
+    "source_preserved": true,
+    "boundary": "Advisory supervised holdout evaluation, not unlabeled anomaly detection or real-world validation. The default Molt runtime keeps this optional feature disabled unless explicitly enabled and licensed."
+  },
+  "temporal": {
+    "status": "COMPLETE",
+    "local_server_and_worker": true,
+    "worker_process_kills": 2,
+    "server_process_kills": 1,
+    "successful_outputs": 2,
+    "blocked_drift": 1,
+    "replay_idempotent": true,
+    "retry_attempts_observed": true,
+    "zero_run_model_calls": true,
+    "boundary": "Local Temporal development server and worker evidence only; not a production durability, multi-host, power-loss, or Temporal Cloud claim."
+  }
+}

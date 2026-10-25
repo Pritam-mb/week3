@@ -49,7 +49,7 @@
     if (details.extra) traces.push([false, "Unexpected columns", list(details.extra)]);
     if (details.column) traces.push([false, "Affected column", escapeHTML(details.column)]);
     if (details.unmapped_count) traces.push([false, "Unmapped rows", escapeHTML(details.unmapped_count)]);
-    $("#decision-trace").innerHTML = traces.map(([ok, title, detail]) => `<div class="trace-item ${ok ? "" : "bad"}"><span class="trace-mark">${ok ? "✓" : "×"}</span><strong>${escapeHTML(title)}</strong><span>${detail}</span></div>`).join("");
+    $("#decision-trace").innerHTML = traces.map(([ok, title, detail]) => `<div class="trace-item ${ok ? "" : "bad"}"><span class="trace-mark">${ok ? "PASS" : "BLOCKED"}</span><strong>${escapeHTML(title)}</strong><span>${detail}</span></div>`).join("");
     $("#trace-caption").textContent = `${fileName(run.input)} · ${formatDate(run.started_at)}`;
     const operations = recipe.operations || [];
     $("#recipe-content").className = "recipe-evidence";

@@ -86,7 +86,7 @@
     return {
       id: version.id,
       v: version.version_number || version.version || version.id,
-      state: version.status === "ACTIVE" ? "active" : version.status === "REJECTED" ? "rejected" : "candidate",
+      state: version.status === "ACTIVE" ? "active" : version.status === "REJECTED" ? "rejected" : version.status === "ARCHIVED" ? "archived" : "candidate",
       kind: version.created_from === "repair" ? "repair" : "compile",
       at: version.created_at,
       calls: number(version.provider_metadata?.llm_calls ?? version.llm_calls, 0),
@@ -150,6 +150,9 @@
     state.versions = list(detail.versions).map(mapVersion);
     state.repairs = list(detail.repair_proposals);
     state.builder.sourcePath = state.builder.sourcePath || selected?.inputReference || "";
+    if (!state.selectedRun || !state.runs.some((r) => String(r.id) === String(state.selectedRun))) {
+      state.selectedRun = state.runs[0]?.id || null;
+    }
     return { selected, detail };
   }
 
@@ -270,30 +273,110 @@
   }
 
   function renderJourney(selected) {
-    const active = state.versions.some((version) => version.state === "active");
+    const activeVersion = state.versions.find((version) => version.state === "active");
+    const active = Boolean(activeVersion);
+    const activeNum = activeVersion ? `v${activeVersion.v}` : "active";
     const candidate = state.versions.some((version) => version.state === "candidate");
+    const rejected = state.versions.some((version) => version.state === "rejected");
     const blocked = state.runs.some((run) => run.status === "BLOCKED_DRIFT");
     const latest = state.runs[0];
+    const latestSucceeded = latest?.status === "SUCCEEDED";
+    const latestRepair = state.repairs[state.repairs.length - 1];
     const repairPending = state.repairs.some((repair) => ["PROPOSED", "VERIFIED"].includes(repair.status));
+    const repairRejected = latestRepair?.status === "REJECTED";
+    const repairApproved = state.repairs.some((repair) => repair.status === "APPROVED");
+
     const steps = [
-      ["Profile input", "The CSV is inspected for columns, types, row count, and fingerprints. Raw rows are not sent to the model.", active || candidate, "Done", "Compile can use the structural profile."],
-      ["Compile recipe", "Gemma proposes constrained JSON operations. It does not write Python or change the CSV.", candidate || active, candidate ? "Candidate" : active ? "Completed" : "Waiting", "The candidate must pass independent tests."],
-      ["Verify recipe", candidate ? "The candidate is tested against golden outputs, errors, and invariants." : active ? "The active recipe already passed its regression suite." : "No candidate has been created yet.", candidate ? "Review" : active ? "Passed" : "Waiting", "A failed candidate stays inactive."],
-      ["Human approval", active ? "A person approved the verified recipe, so it is the active version." : "A person reviews the recipe and explicitly approves it after tests pass.", active ? "Approved" : candidate ? "Action needed" : "Waiting", "Only an approved recipe can run."],
-      ["Run deterministically", latest ? `${latest.calls} model calls were recorded during this run.` : "The approved recipe is reused without another model call.", latest ? "Recorded" : "Waiting", "Compatible input produces an atomic output."],
-      ["Drift blocked", blocked ? "The input no longer matches the approved contract. No output is written and the file is quarantined." : "This step appears only when a file changes in an unapproved way.", blocked ? "Blocked" : "Not triggered", "Select the blocked run to open the repair path."],
-      ["Mastra repair proposal", repairPending ? "Mastra returned a candidate, but it is not active." : "Only request this after a blocked run. Mastra suggests; Molt still decides.", repairPending ? "Candidate stored" : blocked ? "Ready" : "Waiting", "Next: run the full regression suite."],
+      {
+        title: "Profile input",
+        detail: "The CSV is inspected for columns, types, row count, and fingerprints. Raw rows are not sent to the model.",
+        statusText: "Done",
+        tone: active || candidate ? "done" : "warn",
+        next: "Compile can use the structural profile."
+      },
+      {
+        title: "Compile recipe",
+        detail: "Gemma proposes constrained JSON operations. It does not write Python or change the CSV.",
+        statusText: candidate ? "Candidate" : active ? "Completed" : "Waiting",
+        tone: candidate || active ? "done" : "",
+        next: "The candidate must pass independent tests."
+      },
+      {
+        title: "Verify recipe",
+        detail: candidate
+          ? "The candidate is tested against golden outputs, errors, and invariants."
+          : repairRejected
+          ? "Mastra repair proposal failed independent verification (4/8 checks passed). Molt rejected it and kept it inactive."
+          : active
+          ? `Active recipe ${activeNum} passed its full regression suite.`
+          : "No candidate has been created yet.",
+        statusText: candidate ? "Review" : repairRejected ? "Candidate rejected (4/8)" : active ? "Passed" : "Waiting",
+        tone: candidate ? "warn" : repairRejected ? "blocked" : active ? "done" : "",
+        next: "A failed candidate stays inactive."
+      },
+      {
+        title: "Human approval",
+        detail: active
+          ? `A person approved verified recipe ${activeNum}. It is the active version for execution.`
+          : candidate
+          ? "A person reviews the recipe and explicitly approves it after tests pass."
+          : "Only an approved recipe can run.",
+        statusText: candidate ? "Action needed" : repairRejected ? "Candidate not accepted" : active ? `Approved (${activeNum})` : "Waiting",
+        tone: candidate ? "warn" : repairRejected ? "blocked" : active ? "done" : "",
+        next: "Only an approved recipe can run."
+      },
+      {
+        title: "Run deterministically",
+        detail: latest
+          ? `${latest.calls} model calls were recorded. Stored active recipe ${activeNum} executed deterministically.`
+          : "The approved recipe is reused without another model call.",
+        statusText: latest ? (latestSucceeded ? `Reused ${activeNum} (0 calls)` : "Blocked by drift") : "Waiting",
+        tone: latest ? (latestSucceeded ? "done" : "blocked") : "",
+        next: "Compatible input produces an atomic output."
+      },
+      {
+        title: "Drift blocked",
+        detail: blocked
+          ? (latestSucceeded ? "Past runs were quarantined due to drift; the approved repair resolved it." : "Input drift was detected in past runs. The input was quarantined without writing unverified output.")
+          : "This step appears only when a file changes in an unapproved way.",
+        statusText: blocked ? (latestSucceeded ? "Drift resolved" : "Blocked") : "Not triggered",
+        tone: blocked ? (latestSucceeded ? "done" : "blocked") : "",
+        next: "Select a blocked run to review drift evidence."
+      },
+      {
+        title: "Mastra repair proposal",
+        detail: repairRejected
+          ? `Mastra proposal was tested and REJECTED by Molt. Active ${activeNum} remains in effect.`
+          : repairApproved && latestSucceeded
+          ? `Mastra repair was approved and activated as ${activeNum}. New runs execute cleanly.`
+          : repairPending
+          ? "Mastra returned a candidate, but it is not active until tested and approved."
+          : blocked
+          ? "Drift occurred. You can ask Mastra to propose a recipe repair."
+          : "Normal pipeline active.",
+        statusText: repairRejected ? "Proposal rejected" : (repairApproved && latestSucceeded) ? "Repair active" : repairPending ? "Candidate stored" : blocked ? "Ready" : "Waiting",
+        tone: repairRejected ? "blocked" : (repairApproved && latestSucceeded) ? "done" : repairPending ? "warn" : "",
+        next: "Next: run the full regression suite."
+      }
     ];
-    $("#journey-graph").innerHTML = steps.map(([title, detail, done, statusText, next], index) => `<button class="lifecycle-step ${statusText === "Blocked" ? "blocked" : done ? "done" : ""}" type="button" aria-expanded="false"><span class="lifecycle-dot"></span><strong>${escapeHTML(title)}</strong><span class="lifecycle-status">${escapeHTML(statusText)}</span><span class="lifecycle-evidence"><span class="lifecycle-detail"><b>What happens</b><span>${escapeHTML(detail)}</span></span><span class="lifecycle-detail"><b>Result</b><span>${escapeHTML(statusText)}</span></span><span class="lifecycle-detail"><b>What happens next</b><span>${escapeHTML(next)}</span></span></span></button>`).join("");
-    $("#journey-caption").textContent = selected ? `${selected.name} · ${blocked ? "latest file was blocked" : active ? "approved recipe ready" : "start by creating a recipe"}` : "Create an automation to begin";
+
+    $("#journey-graph").innerHTML = steps.map((s) => `<button class="lifecycle-step ${s.tone}" type="button" aria-expanded="false"><span class="lifecycle-dot"></span><strong>${escapeHTML(s.title)}</strong><span class="lifecycle-status">${escapeHTML(s.statusText)}</span><span class="lifecycle-evidence"><span class="lifecycle-detail"><b>What happens</b><span>${escapeHTML(s.detail)}</span></span><span class="lifecycle-detail"><b>Result</b><span>${escapeHTML(s.statusText)}</span></span><span class="lifecycle-detail"><b>What happens next</b><span>${escapeHTML(s.next)}</span></span></span></button>`).join("");
+    $("#journey-caption").textContent = selected ? `${selected.name} · ${blocked ? "drift occurred on past files; active v1 protected" : active ? "approved recipe ready" : "start by creating a recipe"}` : "Create an automation to begin";
   }
 
   function renderBeads() {
     const target = $("#run-beads");
     if (!target) return;
-    if (!state.runs.length) { target.innerHTML = `<span class="empty-state">No runs yet.</span>`; $("#result-sentence").textContent = "No runs yet. Run a compatible CSV to create evidence."; return; }
+    if (!state.runs.length) { target.innerHTML = `<span class="empty-state">No runs yet.</span>`; $("#run-summary").textContent = "No runs yet"; $("#result-sentence").textContent = "No runs yet. Run a compatible CSV to create evidence."; return; }
+    $("#run-summary").textContent = `${state.runs.length} recorded run${state.runs.length === 1 ? "" : "s"}`;
     const activeVersion = state.versions.find((version) => version.state === "active");
-    target.innerHTML = `${activeVersion ? `<div class="version-divider">v${escapeHTML(activeVersion.v)} active</div>` : ""}${state.runs.map((run, index) => `<button class="run-bead ${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}" type="button" data-run-id="${escapeHTML(run.id)}" aria-label="${escapeHTML(run.status)} run ${index + 1}"><i></i><span>run ${index + 1}</span></button>`).join("")}`;
+    const chronological = state.runs.slice().reverse();
+    target.innerHTML = `${activeVersion ? `<div class="version-divider">v${escapeHTML(activeVersion.v)} active</div>` : ""}${chronological.map((run, index) => {
+      const isLatest = index === chronological.length - 1;
+      const isSelected = String(run.id) === String(state.selectedRun);
+      const runNum = index + 1;
+      return `<button class="run-bead ${run.status === "BLOCKED_DRIFT" ? "blocked" : ""} ${isSelected ? "selected" : ""}" type="button" data-run-id="${escapeHTML(run.id)}" aria-label="${escapeHTML(run.status)} run ${runNum}"><i></i><span>run ${runNum}${isLatest ? " (latest)" : ""}</span></button>`;
+    }).join("")}`;
     const latest = state.runs[0];
     $("#result-sentence").textContent = latest.status === "BLOCKED_DRIFT" ? "Latest result: input drift was detected before output was written." : "Latest result: compatible input reused the approved recipe with no model call during execution.";
   }
@@ -326,7 +409,12 @@
       ["5. Human decision", proposalStatus === "APPROVED" ? "A person approved the verified repair." : proposalStatus === "REJECTED" ? "A person rejected the repair or tests failed." : "A person must review the evidence and approve it explicitly.", proposalStatus === "APPROVED" || proposalStatus === "REJECTED"],
     ];
     target.hidden = false; target.className = "repair-card";
-    target.innerHTML = `<div class="panel-heading"><div><h3>Repair for ${escapeHTML(shortId(run.id))}</h3><span class="repair-code">${escapeHTML(run.errorCode || "DRIFT")}</span></div><a class="evidence-link" href="/diff.html?run=${encodeURIComponent(run.id)}">Evidence diff</a></div><p><strong>Molt did not guess.</strong> ${escapeHTML(run.errorMessage || "Input drift was detected before output was written.")}</p><div class="repair-grid"><div>Quarantine<strong>${run.quarantine ? "created" : "pending"}</strong></div><div>Active recipe<strong>${escapeHTML(shortId(run.ver))}</strong></div><div>Verification<strong>${escapeHTML(statusText)}</strong></div></div><div class="repair-steps">${steps.map(([title, detail, complete], index) => `<button class="repair-step ${complete ? "complete" : ""}" type="button" aria-expanded="false"><span>${escapeHTML(title)}</span><small>${escapeHTML(detail)}</small></button>`).join("")}</div><div class="repair-warning">Repair proposals are inactive until tests pass and a person approves them.</div><div class="repair-actions"><button class="quiet-button primary" data-mastra-repair="${escapeHTML(run.id)}" ${mastraReady && !proposal ? "" : "disabled"}>Suggest Mastra repair</button>${!mastraReady ? "<small>Mastra sidecar unavailable. Start it at the configured local endpoint.</small>" : ""}${proposal?.status === "PROPOSED" ? `<button class="quiet-button" data-action="verify" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Run repair tests</button>` : ""}${proposal?.status === "PROPOSED" ? "<small>Step 4: run the full regression suite before accepting the repair.</small>" : ""}${proposal?.status === "VERIFIED" ? `<button class="quiet-button" data-action="approve" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Approve repair</button>` : ""}${proposal ? `<button class="quiet-button" data-action="reject" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Reject repair</button>` : ""}</div>`;
+    const actionButtons = proposalStatus === "APPROVED"
+      ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--live);padding:8px 12px;background:rgba(16,185,129,0.1);border-radius:6px;border:1px solid rgba(16,185,129,0.25);">APPROVED: Repair was activated. New runs now process with the repaired recipe.</div>`
+      : proposalStatus === "REJECTED"
+      ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--blocked);padding:10px 14px;background:rgba(255,90,60,0.08);border-radius:6px;border:1px solid rgba(255,90,60,0.3);width:100%;"><strong>REJECTED: Candidate failed regression verification</strong><span>Molt tested Mastra's repair proposal against golden regression fixtures. The candidate failed independent verification (for example, it dropped required columns), so Molt safely refused to activate it. Production data was protected.</span></div><button class="quiet-button" data-mastra-repair="${escapeHTML(run.id)}" ${mastraReady ? "" : "disabled"} style="margin-top:8px;">Suggest Mastra repair again</button>`
+      : `<button class="quiet-button primary" data-mastra-repair="${escapeHTML(run.id)}" ${mastraReady && !proposal ? "" : "disabled"}>Suggest Mastra repair</button>${!mastraReady ? "<small>Mastra sidecar unavailable. Start it at the configured local endpoint.</small>" : ""}${proposal?.status === "PROPOSED" ? `<button class="quiet-button" data-action="verify" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Run repair tests</button>` : ""}${proposal?.status === "PROPOSED" ? "<small>Step 4: run the full regression suite before accepting the repair.</small>" : ""}${proposal?.status === "VERIFIED" ? `<button class="quiet-button" data-action="approve" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Approve repair</button>` : ""}${proposal ? `<button class="quiet-button" data-action="reject" data-id="${escapeHTML(proposal.id)}" data-kind="repair">Reject repair</button>` : ""}`;
+    target.innerHTML = `<div class="panel-heading"><div><h3>${proposalStatus === "APPROVED" ? `Repair resolved for ${escapeHTML(shortId(run.id))}` : `Repair for ${escapeHTML(shortId(run.id))}`}</h3><span class="repair-code">${escapeHTML(run.errorCode || "DRIFT")}</span></div><a class="evidence-link" href="/diff.html?run=${encodeURIComponent(run.id)}">Evidence diff</a></div><p><strong>Molt did not guess.</strong> ${escapeHTML(run.errorMessage || "Input drift was detected before output was written.")}</p><div class="repair-grid"><div>Quarantine<strong>${run.quarantine ? "created" : "pending"}</strong></div><div>Active recipe<strong>${escapeHTML(shortId(run.ver))}</strong></div><div>Verification<strong>${escapeHTML(statusText)}</strong></div></div><div class="repair-steps">${steps.map(([title, detail, complete], index) => `<button class="repair-step ${complete ? "complete" : ""}" type="button" aria-expanded="false"><span>${escapeHTML(title)}</span><small>${escapeHTML(detail)}</small></button>`).join("")}</div><div class="repair-warning">${proposalStatus === "APPROVED" ? "This repair is already active in the latest recipe." : "Repair proposals are inactive until tests pass and a person approves them."}</div><div class="repair-actions">${actionButtons}</div>`;
   }
 
   function renderRecipeReview() {
@@ -335,7 +423,7 @@
     const active = state.versions.find((version) => version.state === "active");
     const candidate = state.versions.find((version) => version.state === "candidate");
     const rejected = state.versions.find((version) => version.state === "rejected");
-    const version = candidate || rejected || active;
+    const version = active || candidate || rejected || state.versions[0];
     if (!version) { target.className = "recipe-review-empty"; target.textContent = "Create an automation and compile a recipe to see its operations, verification result, and human approval state."; $("#recipe-review-status").textContent = "No recipe yet"; return; }
     const recipe = version.recipe || {};
     const checks = version.verification?.checks_total ? `${version.verification.checks_passed || 0}/${version.verification.checks_total} checks passed` : "Verification not run";
@@ -344,7 +432,8 @@
     const statusClass = isActive ? "active" : version.rawStatus === "REJECTED" ? "rejected" : "";
     const repair = repairFor(version.id);
     target.className = "recipe-review";
-    target.innerHTML = `<div class="recipe-summary"><div class="recipe-title-row"><span class="recipe-name">${escapeHTML(recipe.name || "Unnamed recipe")}</span><span class="approval-state ${statusClass}">${escapeHTML(statusLabel)}</span></div><p class="recipe-description">${escapeHTML(recipe.description || "No description was stored with this recipe.")}</p><div class="recipe-meta"><div><strong>Version ${escapeHTML(version.v)}</strong><span>${escapeHTML(version.kind)} proposal</span></div><div><strong>${escapeHTML(checks)}</strong><span>independent verification</span></div><div><strong>${escapeHTML(version.provider)}</strong><span>proposal source</span></div></div><div><span class="chart-note">Allowed operations</span><div class="recipe-operations">${recipe.operations?.length ? recipe.operations.map((operation) => `<span class="recipe-operation">${escapeHTML(operation.type || operation.operation || "operation")}</span>`).join("") : "<span class=\"recipe-review-empty\">No operations recorded.</span>"}</div></div></div><div class="recipe-approval"><h3>Human acceptance</h3><p>${isActive ? "A person accepted this recipe after verification. It is the only version allowed on the normal run path." : version.rawStatus === "REJECTED" ? "This candidate was not accepted. It remains recorded for review and cannot run." : "Molt will not activate this draft from model output alone. Review the operations and verification result, then choose an action."}</p><div class="approval-checks">Current state: <strong>${escapeHTML(version.rawStatus)}</strong><br>${escapeHTML(checks)}</div><div class="approval-actions">${version.rawStatus === "DRAFT" || version.rawStatus === "VERIFYING" ? `<button class="quiet-button" data-action="verify" data-id="${escapeHTML(repair ? repair.id : version.id)}" data-kind="${repair ? "repair" : "compile"}">Run tests</button>` : ""}${version.rawStatus === "AWAITING_APPROVAL" && !repair ? `<button class="quiet-button primary" data-action="approve" data-id="${escapeHTML(version.id)}" data-kind="compile">Accept recipe</button>` : ""}${repair?.status === "VERIFIED" ? `<button class="quiet-button primary" data-action="approve" data-id="${escapeHTML(repair.id)}" data-kind="repair">Accept repair</button>` : ""}</div></div>`;
+    const rejectedBanner = (rejected && isActive) ? `<div style="grid-column:1/-1;padding:10px 14px;background:rgba(255,90,60,0.08);border:1px solid rgba(255,90,60,0.3);border-radius:8px;font-size:12px;color:var(--muted);"><strong style="color:var(--blocked);">NOTICE: Repair candidate v${escapeHTML(rejected.v)} was REJECTED by verifier (4/8 checks passed).</strong> Molt refused to activate it because it dropped required columns. It was never run. Production runs continue safely using active <strong>v${escapeHTML(active.v)}</strong>.</div>` : "";
+    target.innerHTML = `<div class="recipe-summary"><div class="recipe-title-row"><span class="recipe-name">${escapeHTML(recipe.name || "Unnamed recipe")}</span><span class="approval-state ${statusClass}">${escapeHTML(statusLabel)}</span></div><p class="recipe-description">${escapeHTML(recipe.description || "No description was stored with this recipe.")}</p><div class="recipe-meta"><div><strong>Version ${escapeHTML(version.v)}</strong><span>${isActive ? "approved active version" : `${escapeHTML(version.kind)} proposal`}</span></div><div><strong>${escapeHTML(checks)}</strong><span>independent verification</span></div><div><strong>${escapeHTML(version.provider)}</strong><span>proposal source</span></div></div><div><span class="chart-note">Allowed operations</span><div class="recipe-operations">${recipe.operations?.length ? recipe.operations.map((operation) => `<span class="recipe-operation">${escapeHTML(operation.type || operation.operation || "operation")}</span>`).join("") : "<span class=\"recipe-review-empty\">No operations recorded.</span>"}</div></div></div><div class="recipe-approval"><h3>Human acceptance</h3><p>${isActive ? "A person accepted this recipe after verification. It is the only version allowed on the normal run path." : version.rawStatus === "REJECTED" ? "This candidate was not accepted. It remains recorded for review and cannot run." : "Molt will not activate this draft from model output alone. Review the operations and verification result, then choose an action."}</p><div class="approval-checks">Current state: <strong>${escapeHTML(version.rawStatus)}</strong><br>${escapeHTML(checks)}</div><div class="approval-actions">${version.rawStatus === "DRAFT" || version.rawStatus === "VERIFYING" ? `<button class="quiet-button" data-action="verify" data-id="${escapeHTML(repair ? repair.id : version.id)}" data-kind="${repair ? "repair" : "compile"}">Run tests</button>` : ""}${version.rawStatus === "AWAITING_APPROVAL" && !repair ? `<button class="quiet-button primary" data-action="approve" data-id="${escapeHTML(version.id)}" data-kind="compile">Accept recipe</button>` : ""}${repair?.status === "VERIFIED" ? `<button class="quiet-button primary" data-action="approve" data-id="${escapeHTML(repair.id)}" data-kind="repair">Accept repair</button>` : ""}</div></div>${rejectedBanner}`;
     $("#recipe-review-status").textContent = statusLabel;
   }
 
@@ -412,7 +501,13 @@
   function renderRuns() {
     const body = $("#runs-body");
     if (!body) return;
-    body.innerHTML = state.runs.length ? state.runs.map((run) => `<tr class="${run.status === "BLOCKED_DRIFT" ? "blocked" : ""}" data-run-id="${escapeHTML(run.id)}" tabindex="0" title="Select to inspect this run"><td class="result-cell" data-label="Result"><span class="badge ${run.status === "BLOCKED_DRIFT" ? "blocked" : "success"}">${escapeHTML(run.status === "BLOCKED_DRIFT" ? "Blocked: drift" : run.status === "SUCCEEDED" ? "Succeeded" : run.status)}</span><br><span class="run-name">${escapeHTML(shortId(run.id))}</span></td><td data-label="Rows">${run.rows}</td><td data-label="Model calls">${run.calls}</td><td data-label="Recipe">${escapeHTML(shortId(run.ver))}</td><td data-label="Time">${formatMs(run.ms)}</td><td data-label="Evidence"><a class="evidence-link" href="/diff.html?run=${encodeURIComponent(run.id)}">Evidence diff</a></td></tr>`).join("") : `<tr><td class="empty-row" colspan="6">No runs yet. Run a CSV to create evidence.</td></tr>`;
+    const total = state.runs.length;
+    body.innerHTML = state.runs.length ? state.runs.map((run, index) => {
+      const runNum = total - index;
+      const isLatest = index === 0;
+      const isSelected = String(run.id) === String(state.selectedRun);
+      return `<tr class="${run.status === "BLOCKED_DRIFT" ? "blocked" : ""} ${isSelected ? "selected" : ""}" data-run-id="${escapeHTML(run.id)}" tabindex="0" title="Select to inspect this run"><td class="result-cell" data-label="Result"><span class="badge ${run.status === "BLOCKED_DRIFT" ? "blocked" : "success"}">${escapeHTML(run.status === "BLOCKED_DRIFT" ? "Blocked: drift" : run.status === "SUCCEEDED" ? "Succeeded" : run.status)}</span><br><span class="run-name">Run ${runNum}${isLatest ? " (latest)" : ""} · ${escapeHTML(shortId(run.id))}</span></td><td data-label="Rows">${run.rows}</td><td data-label="Model calls">${run.calls}</td><td data-label="Recipe">${escapeHTML(shortId(run.ver))}</td><td data-label="Time">${formatMs(run.ms)}</td><td data-label="Evidence"><a class="evidence-link" href="/diff.html?run=${encodeURIComponent(run.id)}">Evidence diff</a></td></tr>`;
+    }).join("") : `<tr><td class="empty-row" colspan="6">No runs yet. Run a CSV to create evidence.</td></tr>`;
   }
 
   function render() {
@@ -605,7 +700,7 @@
 
   document.addEventListener("click", (event) => {
     const auto = event.target.closest("[data-auto-id]");
-    if (auto) { state.selected = auto.dataset.autoId; load(); return; }
+    if (auto) { state.selected = auto.dataset.autoId; state.selectedRun = null; load(); return; }
     const runRow = event.target.closest("[data-run-id]");
     if (runRow) {
       state.selectedRun = runRow.dataset.runId;

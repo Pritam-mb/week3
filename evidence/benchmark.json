@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-24T12:59:20.309075+00:00",
+  "recorded_at": "2026-10-25T10:25:39.660939+00:00",
   "baseline": "one model call per comparable file",
   "comparable_files": 2,
   "repeated_llm_baseline": {
@@ -26,7 +26,7 @@
   },
   "deterministic_latency_ms": {
     "samples": 2,
-    "mean": 2.401
+    "mean": 3.968
   },
   "naive_positional_script_baseline": {
     "implementation": "independently_authored_naive_positional_script",
@@ -78,7 +78,7 @@
     "drift_cases_accepted_without_validation": 2,
     "latency_ms": {
       "samples": 4,
-      "mean": 0.023
+      "mean": 0.047
     },
     "cost": {
       "status": "not_estimated",

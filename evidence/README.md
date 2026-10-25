@@ -41,6 +41,13 @@ zero.
 - `pipeline.png` — browser-rendered PNG of the same illustration, visually
   inspected locally and ready for upload to a post editor.
 - `POST_AUDIT.md` — numeric claim-to-source map and check results.
+- `live-integration-check-2026-10-25.json` — current local test and integration
+  results for Gemma/Ollama, Mastra/Groq, Sentry, TabPFN and Temporal; aggregate
+  values only, with explicit claim boundaries.
+- `browser-final-check-2026-10-25.json` — Playwright viewport, overflow, link
+  color and aggregate-only evidence-diff checks, with screenshots.
+- `post-number-audit-2026-10-25.md` — submission number-to-evidence audit and
+  the deliberate claim boundaries.
 - `submission-checks.json` — offline demo with credentials removed and socket
   connections forbidden, local links and tags checked; not publishing-site validation.
 - `CAPTURE_CHECKLIST.md` — capture and publication status, including completed

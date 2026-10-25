@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-10-25",
+  "method": "Playwright Chromium headless",
+  "dashboard": {
+    "viewports": [1280, 1024, 768, 390],
+    "horizontal_overflow_px": {
+      "1280": 0,
+      "1024": 0,
+      "768": 0,
+      "390": 0
+    },
+    "links_checked_per_view": 7,
+    "browser_default_blue_links": false,
+    "screenshots": [
+      "evidence/final-1280.png",
+      "evidence/final-390.png"
+    ]
+  },
+  "evidence_diff": {
+    "route_checked": "/diff.html?run=run_e3214238d672463c",
+    "horizontal_overflow_px": 0,
+    "raw_csv_marker_detected": false
+  },
+  "limitation": "Headless browser metrics and screenshots were captured. Interactive visual review in a separate desktop display was unavailable in this environment."
+}

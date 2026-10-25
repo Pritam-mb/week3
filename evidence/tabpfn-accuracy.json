@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-23T19:39:06.538550+00:00",
+  "recorded_at": "2026-10-25T07:46:21.683282+00:00",
   "status": "COMPLETE",
   "dataset": {
     "file": "molt_drift_features.csv",
@@ -68,5 +68,5 @@
     "zero_division": 0.0
   },
   "source_preserved": true,
-  "elapsed_seconds": 110.815
+  "elapsed_seconds": 132.267
 }

@@ -8,14 +8,17 @@ Use this map when moving `POST_DRAFT.md` into the publishing editor.
    - Place after the “Teach → Gemma proposes…” lifecycle paragraph.
    - It is a conceptual diagram, not a live dashboard screenshot.
 
-2. **Molt dashboard screenshot** — optional
-   - Place at the dashboard image slot after the lifecycle evidence.
-   - Upload only if all CSV values, prompts, responses, local paths,
-     credentials and account details are hidden.
-   - No safe dashboard screenshot is currently recorded, so leaving this slot
-     empty is safer than publishing sensitive data.
+2. **Molt dashboard screenshot** — `evidence/dashboard_live.png`
+   - Place at the dashboard image slot after the demo section.
+   - Verified 100% sanitized: all raw CSV values, credentials, and paths are hidden.
+   - Shows the live run beads, 0 runtime model calls chart, candidate approval state, and ready sidecars.
 
-3. **Temporal UI screenshot** — optional
+3. **Sentry trace screenshot** — `evidence/sentry-trace.png`
+   - Verified 100% sanitized: all spans show only clean lifecycle stage names and latency.
+   - Shows all 9 spans in the waterfall executing in ~50ms total root duration.
+   - Zero CSV row values, zero credentials, zero local paths.
+
+4. **Temporal UI screenshot** — optional
    - Place after the Temporal paragraph.
    - Use only if a real screenshot of the completed workflow was captured.
    - If unavailable, leave the slot empty and keep the narrower JSON-backed
@@ -23,9 +26,6 @@ Use this map when moving `POST_DRAFT.md` into the publishing editor.
 
 ## Do not attach
 
-- **Sentry screenshots:** the inspected trace contained sensitive CSV values and
-  local file paths. Sentry is implemented, but its trace is intentionally not
-  shown.
 - **TabPFN dashboard screenshot:** the evaluation ran locally on CPU with
   telemetry disabled. Use `TABPFN_PROOF.md` and `tabpfn-accuracy.json`.
 - **Raw Gemma/SQLite/debug screenshots:** the JSON evidence and tables are the
