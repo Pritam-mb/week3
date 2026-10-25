@@ -15,6 +15,11 @@
   Compile once. Verify against truth. Reuse forever without repeated inference.
 </h3>
 
+<p align="center">
+  <a href="https://github.com/Pritam-mb/week3/raw/main/evidence/molt-presentation.mp4"><b>🎬 Watch Digital Video (MP4)</b></a> &nbsp;•&nbsp; 
+  <a href="https://raw.githubusercontent.com/Pritam-mb/week3/main/evidence/molt-presentation.gif"><b>⚡ View Animated Explainer (GIF)</b></a>
+</p>
+
 ---
 
 ## What is Molt?
